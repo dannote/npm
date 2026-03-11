@@ -1,6 +1,8 @@
 defmodule NPMTest do
   use ExUnit.Case, async: true
 
+  alias Mix.Tasks.Npm.Install, as: NpmInstall
+
   # --- PackageJSON ---
 
   describe "PackageJSON.read" do
@@ -77,6 +79,82 @@ defmodule NPMTest do
       NPM.PackageJSON.add_dep("@types/node", "^20.0.0", path)
 
       assert {:ok, %{"@types/node" => "^20.0.0"}} = NPM.PackageJSON.read(path)
+    end
+  end
+
+  describe "PackageJSON.remove_dep" do
+    @tag :tmp_dir
+    test "removes existing dep", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      NPM.PackageJSON.add_dep("lodash", "^4.17.0", path)
+      NPM.PackageJSON.add_dep("express", "^5.0.0", path)
+
+      assert :ok = NPM.PackageJSON.remove_dep("lodash", path)
+      assert {:ok, deps} = NPM.PackageJSON.read(path)
+      refute Map.has_key?(deps, "lodash")
+      assert deps["express"] == "^5.0.0"
+    end
+
+    @tag :tmp_dir
+    test "returns error for missing dep", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+      NPM.PackageJSON.add_dep("lodash", "^4.17.0", path)
+
+      assert {:error, {:not_found, "express"}} = NPM.PackageJSON.remove_dep("express", path)
+    end
+
+    @tag :tmp_dir
+    test "removes scoped package", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      NPM.PackageJSON.add_dep("@types/node", "^20.0.0", path)
+      assert :ok = NPM.PackageJSON.remove_dep("@types/node", path)
+
+      assert {:ok, %{}} = NPM.PackageJSON.read(path)
+    end
+
+    @tag :tmp_dir
+    test "preserves non-dependency fields", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+      File.write!(path, ~s({"name": "app", "dependencies": {"lodash": "^4.0"}}))
+
+      NPM.PackageJSON.remove_dep("lodash", path)
+
+      content = File.read!(path) |> :json.decode()
+      assert content["name"] == "app"
+      assert content["dependencies"] == %{}
+    end
+  end
+
+  # --- Package spec parsing ---
+
+  describe "parse_package_spec" do
+    test "plain name" do
+      assert {"lodash", "latest"} = NpmInstall.parse_package_spec("lodash")
+    end
+
+    test "name with range" do
+      assert {"lodash", "^4.0"} = NpmInstall.parse_package_spec("lodash@^4.0")
+    end
+
+    test "scoped package" do
+      assert {"@types/node", "latest"} = NpmInstall.parse_package_spec("@types/node")
+    end
+
+    test "scoped package with range" do
+      assert {"@types/node", "^20.0.0"} =
+               NpmInstall.parse_package_spec("@types/node@^20.0.0")
+    end
+
+    test "scoped package with exact version" do
+      assert {"@babel/core", "7.24.0"} =
+               NpmInstall.parse_package_spec("@babel/core@7.24.0")
+    end
+
+    test "scoped package with tilde range" do
+      assert {"@scope/pkg", "~1.2.3"} =
+               NpmInstall.parse_package_spec("@scope/pkg@~1.2.3")
     end
   end
 
@@ -288,7 +366,6 @@ defmodule NPMTest do
 
       pkg_tgz = create_test_tgz(%{"package/package.json" => ~s({"name":"test-pkg"})})
 
-      # Start a tiny HTTP server to serve the tarball
       {:ok, listen} = :gen_tcp.listen(0, [:binary, active: false, reuseaddr: true])
       {:ok, port} = :inet.port(listen)
 
@@ -307,7 +384,6 @@ defmodule NPMTest do
       assert {:ok, path} = NPM.Cache.ensure("test-pkg", "1.0.0", url, "")
       assert File.exists?(Path.join(path, "package.json"))
 
-      # Second call should use cache
       :gen_tcp.close(listen)
       assert {:ok, ^path} = NPM.Cache.ensure("test-pkg", "1.0.0", url, "")
 
@@ -377,7 +453,6 @@ defmodule NPMTest do
         "index.js" => "v2"
       })
 
-      # Create stale entry
       stale_dir = Path.join([nm_dir, "pkg"])
       File.mkdir_p!(stale_dir)
       File.write!(Path.join(stale_dir, "index.js"), "v1")
