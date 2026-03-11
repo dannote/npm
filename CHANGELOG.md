@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+- Rename repository to [npm_ex](https://github.com/dannote/npm_ex)
+
 ## 0.3.0
 
 - `mix npm.remove` — remove a package from `package.json`

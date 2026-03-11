@@ -1,7 +1,7 @@
 defmodule NPM.MixProject do
   use Mix.Project
 
-  @version "0.3.0"
+  @version "0.3.1"
   @source_url "https://github.com/dannote/npm_ex"
 
   def project do
