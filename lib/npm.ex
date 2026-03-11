@@ -12,20 +12,21 @@ defmodule NPM do
       mix npm.install lodash@^4.0  # Add with specific range
       mix npm.get               # Fetch locked deps without resolving
 
-  Packages are installed into `deps/npm/<name>/`.
+  Packages are cached globally in `~/.npm_ex/cache/` and linked into
+  `node_modules/` via symlinks (macOS/Linux) or copies (Windows).
   """
 
-  @deps_dir "deps/npm"
+  @node_modules "node_modules"
 
   @doc """
   Install all dependencies from `package.json`.
 
   Resolves versions using the PubGrub solver, writes `npm.lock`,
-  downloads tarballs, and extracts into `deps/npm/`.
+  populates the global cache, and links into `node_modules/`.
   """
   @spec install :: :ok | {:error, term()}
   def install do
-    case NPM.PackageJson.read() do
+    case NPM.PackageJSON.read() do
       {:ok, deps} -> do_install(deps)
       error -> error
     end
@@ -39,8 +40,8 @@ defmodule NPM do
     range = if range == "latest", do: resolve_latest(name), else: range
 
     with range_str when is_binary(range_str) <- range,
-         :ok <- NPM.PackageJson.add_dep(name, range_str),
-         {:ok, deps} <- NPM.PackageJson.read() do
+         :ok <- NPM.PackageJSON.add_dep(name, range_str),
+         {:ok, deps} <- NPM.PackageJSON.read() do
       do_install(deps)
     end
   end
@@ -48,7 +49,8 @@ defmodule NPM do
   @doc """
   Fetch locked dependencies without re-resolving.
 
-  Reads `npm.lock` and downloads any missing packages.
+  Reads `npm.lock` and populates the global cache and `node_modules/`
+  for any missing packages.
   """
   @spec get :: :ok | {:error, term()}
   def get do
@@ -58,16 +60,12 @@ defmodule NPM do
         :ok
 
       {:ok, lockfile} ->
-        fetch_locked(lockfile)
+        link_from_lockfile(lockfile)
 
       error ->
         error
     end
   end
-
-  @doc "Path where npm packages are installed."
-  @spec deps_dir :: String.t()
-  def deps_dir, do: @deps_dir
 
   # --- Private ---
 
@@ -84,13 +82,29 @@ defmodule NPM do
       {:ok, resolved} ->
         lockfile = build_lockfile(resolved)
         NPM.Lockfile.write(lockfile)
-        fetch_locked(lockfile)
-        report_installed(lockfile)
+        link_from_lockfile(lockfile)
 
       {:error, message} ->
         Mix.shell().error("Resolution failed:\n#{message}")
         {:error, :resolution_failed}
     end
+  end
+
+  defp link_from_lockfile(lockfile) do
+    log_fetching(lockfile)
+
+    case NPM.Linker.link(lockfile, @node_modules) do
+      :ok -> report_installed(lockfile)
+      error -> error
+    end
+  end
+
+  defp log_fetching(lockfile) do
+    Enum.each(lockfile, fn {name, entry} ->
+      unless NPM.Cache.cached?(name, entry.version) do
+        Mix.shell().info("  Fetching #{name}@#{entry.version}")
+      end
+    end)
   end
 
   defp report_installed(lockfile) do
@@ -111,33 +125,6 @@ defmodule NPM do
          tarball: info.dist.tarball,
          dependencies: info.dependencies
        }}
-    end
-  end
-
-  defp fetch_locked(lockfile) do
-    File.mkdir_p!(@deps_dir)
-
-    lockfile
-    |> Task.async_stream(
-      fn {name, entry} -> fetch_package(name, entry) end,
-      max_concurrency: 8,
-      timeout: 60_000
-    )
-    |> Enum.reduce(:ok, fn
-      {:ok, :ok}, acc -> acc
-      {:ok, {:error, reason}}, _ -> {:error, reason}
-      {:exit, reason}, _ -> {:error, reason}
-    end)
-  end
-
-  defp fetch_package(name, entry) do
-    dest = Path.join(@deps_dir, name)
-
-    if File.exists?(Path.join(dest, "package.json")) do
-      :ok
-    else
-      Mix.shell().info("  Fetching #{name}@#{entry.version}")
-      NPM.Tarball.fetch_and_extract(entry.tarball, entry.integrity, dest)
     end
   end
 

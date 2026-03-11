@@ -34,19 +34,15 @@ defmodule NPM.IntegrationTest do
     end
   end
 
-  describe "full install" do
+  describe "full install with cache + node_modules" do
     @tag :tmp_dir
-    test "install writes lockfile and fetches tarball", %{tmp_dir: dir} do
-      pkg_path = Path.join(dir, "package.json")
-      lock_path = Path.join(dir, "npm.lock")
-      deps_dir = Path.join(dir, "deps/npm")
+    test "installs package into cache and links to node_modules", %{tmp_dir: dir} do
+      cache_dir = Path.join(dir, "npm_cache")
+      nm_dir = Path.join(dir, "node_modules")
+      System.put_env("NPM_EX_CACHE_DIR", cache_dir)
 
-      File.write!(pkg_path, ~s({"dependencies": {"is-number": "^7.0.0"}}))
-
-      # Temporarily override paths
-      {:ok, deps} = NPM.PackageJson.read(pkg_path)
       NPM.Resolver.clear_cache()
-      {:ok, resolved} = NPM.Resolver.resolve(deps)
+      {:ok, resolved} = NPM.Resolver.resolve(%{"is-number" => "^7.0.0"})
 
       lockfile =
         for {name, version_str} <- resolved, into: %{} do
@@ -62,15 +58,15 @@ defmodule NPM.IntegrationTest do
            }}
         end
 
-      NPM.Lockfile.write(lockfile, lock_path)
+      assert :ok = NPM.Linker.link(lockfile, nm_dir)
 
-      assert {:ok, read_lock} = NPM.Lockfile.read(lock_path)
-      assert read_lock["is-number"].version =~ ~r/^7\./
+      # Package in cache
+      assert NPM.Cache.cached?("is-number", lockfile["is-number"].version)
 
-      entry = read_lock["is-number"]
-      dest = Path.join(deps_dir, "is-number")
-      assert {:ok, _count} = NPM.Tarball.fetch_and_extract(entry.tarball, entry.integrity, dest)
-      assert File.exists?(Path.join(dest, "package.json"))
+      # node_modules linked
+      assert File.exists?(Path.join([nm_dir, "is-number", "package.json"]))
+
+      System.delete_env("NPM_EX_CACHE_DIR")
     end
   end
 end
