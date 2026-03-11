@@ -8,14 +8,9 @@ defmodule NPM do
   ## Mix tasks
 
       mix npm.install           # Install all deps from package.json
-      mix npm.install lodash    # Add and install a package
+      mix npm.install lodash    # Add latest version
+      mix npm.install lodash@^4.0  # Add with specific range
       mix npm.get               # Fetch locked deps without resolving
-
-  ## Programmatic API
-
-      NPM.install()
-      NPM.install("lodash", "^4.17.0")
-      NPM.get()
 
   Packages are installed into `deps/npm/<name>/`.
   """
@@ -30,9 +25,9 @@ defmodule NPM do
   """
   @spec install :: :ok | {:error, term()}
   def install do
-    with {:ok, deps} <- NPM.PackageJson.read(),
-         :ok <- do_install(deps) do
-      :ok
+    case NPM.PackageJson.read() do
+      {:ok, deps} -> do_install(deps)
+      error -> error
     end
   end
 
@@ -43,16 +38,10 @@ defmodule NPM do
   def install(name, range \\ "latest") do
     range = if range == "latest", do: resolve_latest(name), else: range
 
-    case range do
-      {:error, reason} ->
-        {:error, reason}
-
-      range_str ->
-        with :ok <- NPM.PackageJson.add_dep(name, range_str),
-             {:ok, deps} <- NPM.PackageJson.read(),
-             :ok <- do_install(deps) do
-          :ok
-        end
+    with range_str when is_binary(range_str) <- range,
+         :ok <- NPM.PackageJson.add_dep(name, range_str),
+         {:ok, deps} <- NPM.PackageJson.read() do
+      do_install(deps)
     end
   end
 
@@ -63,13 +52,16 @@ defmodule NPM do
   """
   @spec get :: :ok | {:error, term()}
   def get do
-    with {:ok, lockfile} <- NPM.Lockfile.read() do
-      if lockfile == %{} do
+    case NPM.Lockfile.read() do
+      {:ok, lockfile} when lockfile == %{} ->
         Mix.shell().info("No npm.lock found, run `mix npm.install` first.")
         :ok
-      else
+
+      {:ok, lockfile} ->
         fetch_locked(lockfile)
-      end
+
+      error ->
+        error
     end
   end
 
@@ -86,24 +78,25 @@ defmodule NPM do
 
   defp do_install(deps) do
     Mix.shell().info("Resolving npm dependencies...")
-
     NPM.Resolver.clear_cache()
 
     case NPM.Resolver.resolve(deps) do
       {:ok, resolved} ->
         lockfile = build_lockfile(resolved)
-
-        with :ok <- NPM.Lockfile.write(lockfile),
-             :ok <- fetch_locked(lockfile) do
-          count = map_size(lockfile)
-          Mix.shell().info("Installed #{count} npm package#{if count == 1, do: "", else: "s"}.")
-          :ok
-        end
+        NPM.Lockfile.write(lockfile)
+        fetch_locked(lockfile)
+        report_installed(lockfile)
 
       {:error, message} ->
         Mix.shell().error("Resolution failed:\n#{message}")
         {:error, :resolution_failed}
     end
+  end
+
+  defp report_installed(lockfile) do
+    count = map_size(lockfile)
+    Mix.shell().info("Installed #{count} npm package#{if count != 1, do: "s", else: ""}.")
+    :ok
   end
 
   defp build_lockfile(resolved) do
@@ -131,10 +124,9 @@ defmodule NPM do
       timeout: 60_000
     )
     |> Enum.reduce(:ok, fn
-      {:ok, :ok}, :ok -> :ok
+      {:ok, :ok}, acc -> acc
       {:ok, {:error, reason}}, _ -> {:error, reason}
       {:exit, reason}, _ -> {:error, reason}
-      _, acc -> acc
     end)
   end
 
@@ -145,34 +137,33 @@ defmodule NPM do
       :ok
     else
       Mix.shell().info("  Fetching #{name}@#{entry.version}")
-
-      case NPM.Tarball.fetch_and_extract(entry.tarball, entry.integrity, dest) do
-        {:ok, _count} -> :ok
-        {:error, reason} -> {:error, {name, reason}}
-      end
+      NPM.Tarball.fetch_and_extract(entry.tarball, entry.integrity, dest)
     end
   end
 
   defp resolve_latest(name) do
     case NPM.Registry.get_packument(name) do
-      {:ok, packument} ->
-        packument.versions
-        |> Map.keys()
-        |> Enum.flat_map(fn v ->
-          case Version.parse(v) do
-            {:ok, ver} -> if ver.pre == [], do: [ver], else: []
-            :error -> []
-          end
-        end)
-        |> Enum.sort(Version)
-        |> List.last()
-        |> case do
-          nil -> {:error, :no_versions}
-          v -> "^#{v}"
-        end
+      {:ok, packument} -> latest_stable_range(packument)
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
-      {:error, reason} ->
-        {:error, reason}
+  defp latest_stable_range(packument) do
+    packument.versions
+    |> Map.keys()
+    |> Enum.flat_map(&parse_stable_version/1)
+    |> Enum.sort(Version)
+    |> List.last()
+    |> case do
+      nil -> {:error, :no_versions}
+      v -> "^#{v}"
+    end
+  end
+
+  defp parse_stable_version(v) do
+    case Version.parse(v) do
+      {:ok, ver} -> if ver.pre == [], do: [ver], else: []
+      :error -> []
     end
   end
 end

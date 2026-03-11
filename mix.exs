@@ -12,7 +12,7 @@ defmodule NPM.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
-      dialyzer: [plt_add_apps: [:mix, :inets, :ssl, :public_key, :crypto]],
+      dialyzer: [plt_add_apps: [:mix]],
       name: "NPM",
       description:
         "npm package manager for Elixir — resolve, fetch, and manage npm dependencies with Mix tasks.",
@@ -24,7 +24,7 @@ defmodule NPM.MixProject do
   end
 
   def application do
-    [extra_applications: [:inets, :ssl, :public_key, :crypto]]
+    [extra_applications: [:crypto]]
   end
 
   defp aliases do
@@ -32,6 +32,7 @@ defmodule NPM.MixProject do
       lint: [
         "format --check-formatted",
         "credo --strict",
+        "ex_dna",
         "dialyzer"
       ],
       ci: ["lint", "cmd MIX_ENV=test mix test"]
@@ -42,8 +43,11 @@ defmodule NPM.MixProject do
     [
       {:npm_semver, "~> 0.1.0"},
       {:hex_solver, "~> 0.2"},
+      {:req, "~> 0.5"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:ex_slop, "~> 0.2", only: [:dev, :test], runtime: false},
+      {:ex_dna, "~> 1.1", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false}
     ]
   end

@@ -2,7 +2,7 @@ defmodule NPM.Tarball do
   @moduledoc """
   Download and extract npm package tarballs.
 
-  Verifies SHA-512 integrity and extracts contents in memory.
+  Verifies SHA-512 integrity and extracts contents to disk.
   """
 
   @doc """
@@ -13,35 +13,17 @@ defmodule NPM.Tarball do
   @spec fetch_and_extract(String.t(), String.t(), String.t()) ::
           {:ok, non_neg_integer()} | {:error, term()}
   def fetch_and_extract(tarball_url, integrity, dest_dir) do
-    with {:ok, body} <- download(tarball_url),
-         :ok <- verify_integrity(body, integrity),
-         {:ok, count} <- extract(body, dest_dir) do
-      {:ok, count}
-    end
-  end
+    case Req.get(tarball_url, decode_body: false) do
+      {:ok, %{status: 200, body: body}} ->
+        with :ok <- verify_integrity(body, integrity) do
+          extract(body, dest_dir)
+        end
 
-  @doc "Download a tarball and return the raw bytes."
-  @spec download(String.t()) :: {:ok, binary()} | {:error, term()}
-  def download(url) do
-    :inets.start()
-    :ssl.start()
-    cacerts = :public_key.cacerts_get()
+      {:ok, %{status: status}} ->
+        {:error, {:http, status}}
 
-    ssl_opts = [
-      ssl: [
-        verify: :verify_peer,
-        cacerts: cacerts,
-        depth: 3,
-        customize_hostname_check: [
-          match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
-        ]
-      ]
-    ]
-
-    case :httpc.request(:get, {~c"#{url}", []}, ssl_opts, body_format: :binary) do
-      {:ok, {{_, 200, _}, _, body}} -> {:ok, body}
-      {:ok, {{_, status, _}, _, _}} -> {:error, {:http, status}}
-      {:error, reason} -> {:error, reason}
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -51,12 +33,7 @@ defmodule NPM.Tarball do
 
   def verify_integrity(body, "sha512-" <> expected_b64) do
     actual = :crypto.hash(:sha512, body) |> Base.encode64()
-
-    if actual == expected_b64 do
-      :ok
-    else
-      {:error, :integrity_mismatch}
-    end
+    if actual == expected_b64, do: :ok, else: {:error, :integrity_mismatch}
   end
 
   def verify_integrity(body, "sha1-" <> expected_b64) do
@@ -78,22 +55,20 @@ defmodule NPM.Tarball do
 
     case :erl_tar.extract({:binary, tgz_data}, [:compressed, :memory]) do
       {:ok, entries} ->
-        count =
-          entries
-          |> Enum.count(fn {path, content} ->
-            rel_path = strip_prefix(to_string(path))
-            full_path = Path.join(dest_dir, rel_path)
-
-            full_path |> Path.dirname() |> File.mkdir_p!()
-            File.write!(full_path, content)
-            true
-          end)
-
-        {:ok, count}
+        Enum.each(entries, &write_entry(&1, dest_dir))
+        {:ok, length(entries)}
 
       {:error, reason} ->
         {:error, {:extract, reason}}
     end
+  end
+
+  defp write_entry({path, content}, dest_dir) do
+    rel_path = strip_prefix(to_string(path))
+    full_path = Path.join(dest_dir, rel_path)
+
+    full_path |> Path.dirname() |> File.mkdir_p!()
+    File.write!(full_path, content)
   end
 
   defp strip_prefix("package/" <> rest), do: rest
