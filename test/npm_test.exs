@@ -2687,6 +2687,52 @@ defmodule NPMTest do
     end
   end
 
+  # --- ScopeRegistry ---
+
+  describe "ScopeRegistry.scoped?" do
+    test "scoped package" do
+      assert NPM.ScopeRegistry.scoped?("@babel/core")
+    end
+
+    test "unscoped package" do
+      refute NPM.ScopeRegistry.scoped?("lodash")
+    end
+  end
+
+  describe "ScopeRegistry.scope" do
+    test "extracts scope" do
+      assert "@babel" = NPM.ScopeRegistry.scope("@babel/core")
+    end
+
+    test "returns nil for unscoped" do
+      assert nil == NPM.ScopeRegistry.scope("lodash")
+    end
+
+    test "handles double-nested scope" do
+      assert "@my-org" = NPM.ScopeRegistry.scope("@my-org/my-package")
+    end
+  end
+
+  describe "ScopeRegistry.registry_for" do
+    test "unscoped returns default" do
+      url = NPM.ScopeRegistry.registry_for("lodash")
+      assert is_binary(url)
+      assert String.contains?(url, "registry")
+    end
+
+    test "scoped without config returns default" do
+      url = NPM.ScopeRegistry.registry_for("@nonexistent-scope-xyz/pkg")
+      assert url == NPM.Registry.registry_url()
+    end
+  end
+
+  describe "ScopeRegistry.all_scopes" do
+    test "returns map" do
+      result = NPM.ScopeRegistry.all_scopes()
+      assert is_map(result)
+    end
+  end
+
   # --- VersionUtil ---
 
   describe "VersionUtil.parse_triple" do
