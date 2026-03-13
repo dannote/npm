@@ -988,6 +988,52 @@ defmodule NPMTest do
     end
   end
 
+  # --- JSON.encode_pretty with complex data ---
+
+  describe "JSON.encode_pretty complex" do
+    test "sorts nested map keys at all levels" do
+      data = %{
+        "z" => %{"b" => 1, "a" => 2},
+        "a" => %{"d" => 3, "c" => 4}
+      }
+
+      json = NPM.JSON.encode_pretty(data)
+      a_pos = :binary.match(json, ~s("a")) |> elem(0)
+      z_pos = :binary.match(json, ~s("z")) |> elem(0)
+      assert a_pos < z_pos
+    end
+
+    test "handles deeply nested structures" do
+      data = %{"l1" => %{"l2" => %{"l3" => "deep"}}}
+      json = NPM.JSON.encode_pretty(data)
+      assert json =~ "deep"
+      assert json =~ "l1"
+      assert json =~ "l2"
+      assert json =~ "l3"
+    end
+
+    test "handles mixed arrays and maps" do
+      data = %{"items" => [%{"name" => "a"}, %{"name" => "b"}]}
+      json = NPM.JSON.encode_pretty(data)
+      assert json =~ ~s("name": "a")
+      assert json =~ ~s("name": "b")
+    end
+
+    test "produces valid JSON" do
+      data = %{
+        "name" => "test",
+        "version" => "1.0.0",
+        "dependencies" => %{"a" => "^1.0", "b" => "^2.0"},
+        "scripts" => %{"test" => "jest"}
+      }
+
+      json = NPM.JSON.encode_pretty(data)
+      decoded = :json.decode(json)
+      assert decoded["name"] == "test"
+      assert decoded["dependencies"]["a"] == "^1.0"
+    end
+  end
+
   # --- Tarball.extract edge cases ---
 
   describe "Tarball.extract edge cases" do
@@ -1157,6 +1203,33 @@ defmodule NPMTest do
       File.mkdir_p!(nm_dir)
 
       assert :ok = NPM.Linker.prune(nm_dir, MapSet.new(["something"]))
+    end
+  end
+
+  # --- Lockfile with many packages ---
+
+  describe "Lockfile scalability" do
+    @tag :tmp_dir
+    test "handles 50 packages round-trip", %{tmp_dir: dir} do
+      path = Path.join(dir, "npm.lock")
+
+      lockfile =
+        for i <- 1..50, into: %{} do
+          {"pkg-#{i}",
+           %{
+             version: "#{i}.0.0",
+             integrity: "sha512-hash#{i}==",
+             tarball: "https://example.com/pkg-#{i}.tgz",
+             dependencies: %{}
+           }}
+        end
+
+      NPM.Lockfile.write(lockfile, path)
+      {:ok, read_back} = NPM.Lockfile.read(path)
+
+      assert map_size(read_back) == 50
+      assert read_back["pkg-1"].version == "1.0.0"
+      assert read_back["pkg-50"].version == "50.0.0"
     end
   end
 
