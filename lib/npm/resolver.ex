@@ -153,15 +153,44 @@ defmodule NPM.Resolver do
     end
   end
 
-  defp collect_nested_versions(package, _excluded) do
-    case get_cached_packument(package) do
-      {:ok, packument} ->
-        versions = Map.keys(packument.versions) |> Enum.sort()
-        %{package => versions}
+  @doc false
+  def get_original_deps(package) do
+    ensure_cache()
 
-      _ ->
-        %{}
+    case :ets.lookup(@table, {:__original_deps__, package}) do
+      [{_, deps}] -> deps
+      [] -> %{}
     end
+  end
+
+  defp collect_nested_versions(package, _excluded) do
+    # Before stripping, save the original dependency data
+    # so the linker can look up which parents need which version
+    save_original_deps(package)
+    %{package => :nested}
+  end
+
+  defp save_original_deps(package) do
+    parent_deps =
+      :ets.foldl(
+        fn
+          {key, _}, acc when is_atom(key) -> acc
+          {name, packument}, acc -> find_dependents(name, packument, package, acc)
+        end,
+        %{},
+        @table
+      )
+
+    :ets.insert(@table, {{:__original_deps__, package}, parent_deps})
+  end
+
+  defp find_dependents(name, packument, package, acc) do
+    Enum.reduce(packument.versions, acc, fn {ver, info}, inner_acc ->
+      case Map.get(info.dependencies, package) do
+        nil -> inner_acc
+        range -> Map.put(inner_acc, "#{name}@#{ver}", range)
+      end
+    end)
   end
 
   @doc "Clear the packument cache."

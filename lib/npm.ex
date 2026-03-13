@@ -217,12 +217,12 @@ defmodule NPM do
 
     case result do
       {:ok, resolved} ->
-        {nested, flat} = Map.pop(resolved, :nested, %{})
-        count = map_size(flat) + if nested == %{}, do: 0, else: map_size(nested)
-        Mix.shell().info("Resolved #{count} packages in #{format_ms(resolve_us)}")
+        {nested_info, flat} = Map.pop(resolved, :nested, %{})
+        pkg_count = map_size(flat)
+        Mix.shell().info("Resolved #{pkg_count} packages in #{format_ms(resolve_us)}")
 
-        if nested != %{} do
-          Mix.shell().info("  (#{map_size(nested)} with nested versions)")
+        if nested_info != %{} do
+          Mix.shell().info("  (#{map_size(nested_info)} packages with nested versions)")
         end
 
         lockfile = build_lockfile(flat)
