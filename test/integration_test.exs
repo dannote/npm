@@ -459,7 +459,6 @@ defmodule NPM.IntegrationTest do
 
   describe "npm compatibility: exports field from registry" do
     test "chalk 5.x has exports map" do
-      {:ok, packument} = NPM.Registry.get_packument("chalk")
       raw = get_raw_packument("chalk")
       v5 = raw["versions"]["5.4.1"]
 
@@ -467,6 +466,102 @@ defmodule NPM.IntegrationTest do
         nil -> :ok
         exports -> assert is_map(exports) or is_binary(exports)
       end
+    end
+  end
+
+  describe "npm compatibility: x-range resolution" do
+    setup do
+      NPM.Resolver.clear_cache()
+      :ok
+    end
+
+    test "1.x resolves to latest 1.x" do
+      {:ok, resolved} = NPM.Resolver.resolve(%{"depd" => "1.x"})
+      {major, _, _} = parse_version(resolved["depd"])
+      assert major == 1
+    end
+
+    test "1.2.x resolves within minor" do
+      {:ok, resolved} = NPM.Resolver.resolve(%{"mime-db" => "1.52.x"})
+      assert resolved["mime-db"] == "1.52.0"
+    end
+
+    test "latest resolves to some version" do
+      {:ok, resolved} = NPM.Resolver.resolve(%{"is-number" => "latest"})
+      assert Map.has_key?(resolved, "is-number")
+    end
+
+    test "empty string resolves like *" do
+      {:ok, resolved} = NPM.Resolver.resolve(%{"is-number" => ""})
+      assert Map.has_key?(resolved, "is-number")
+    end
+  end
+
+  describe "npm compatibility: pre-release handling" do
+    setup do
+      NPM.Resolver.clear_cache()
+      :ok
+    end
+
+    test "caret range excludes pre-releases by default" do
+      {:ok, resolved} = NPM.Resolver.resolve(%{"is-number" => "^7.0.0"})
+      version = resolved["is-number"]
+      {:ok, v} = Version.parse(version)
+      assert v.pre == []
+    end
+  end
+
+  describe "npm compatibility: caret zero-major semantics" do
+    setup do
+      NPM.Resolver.clear_cache()
+      :ok
+    end
+
+    test "^0.0.x pins to exact patch" do
+      # ^0.0.3 should match >=0.0.3, <0.0.4
+      assert {:ok, constraint} = NPMSemver.to_hex_constraint("^0.0.3")
+      assert NPMSemver.matches?("0.0.3", "^0.0.3")
+      refute NPMSemver.matches?("0.0.4", "^0.0.3")
+    end
+
+    test "^0.1.x allows patch bumps" do
+      # ^0.1.0 should match >=0.1.0, <0.2.0
+      assert NPMSemver.matches?("0.1.5", "^0.1.0")
+      refute NPMSemver.matches?("0.2.0", "^0.1.0")
+    end
+
+    test "^1.x allows minor+patch bumps" do
+      assert NPMSemver.matches?("1.9.9", "^1.0.0")
+      refute NPMSemver.matches?("2.0.0", "^1.0.0")
+    end
+  end
+
+  describe "npm compatibility: tilde semantics" do
+    test "~1.2.3 allows patch bumps only" do
+      assert NPMSemver.matches?("1.2.5", "~1.2.3")
+      refute NPMSemver.matches?("1.3.0", "~1.2.3")
+    end
+
+    test "~0.2 allows patch bumps" do
+      assert NPMSemver.matches?("0.2.5", "~0.2")
+      refute NPMSemver.matches?("0.3.0", "~0.2")
+    end
+  end
+
+  describe "npm compatibility: hyphen ranges" do
+    test "1.0.0 - 2.0.0 is inclusive" do
+      assert NPMSemver.matches?("1.0.0", "1.0.0 - 2.0.0")
+      assert NPMSemver.matches?("1.5.0", "1.0.0 - 2.0.0")
+      assert NPMSemver.matches?("2.0.0", "1.0.0 - 2.0.0")
+      refute NPMSemver.matches?("2.0.1", "1.0.0 - 2.0.0")
+    end
+  end
+
+  describe "npm compatibility: OR ranges" do
+    test "union with ||" do
+      assert NPMSemver.matches?("1.5.0", "^1.0.0 || ^2.0.0")
+      assert NPMSemver.matches?("2.5.0", "^1.0.0 || ^2.0.0")
+      refute NPMSemver.matches?("3.0.0", "^1.0.0 || ^2.0.0")
     end
   end
 

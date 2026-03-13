@@ -1,23 +1,27 @@
 # Autoresearch Ideas
 
-## Completed — 31 tasks, 15 lib modules, 293 tests
-- devDependencies, optionalDependencies, overrides, resolutions, workspaces
-- bin linking, pruning, --save-exact/--save-dev/--save-optional/--production
-- Custom registry, auth tokens, retry, .npmrc, SHA-256, peerDeps (+ meta), deprecation warnings
-- Lockfile diff, NPM.Validator, NPM.Compiler, NPM.Config, file:/git: dep detection
-- NPM.Exports (conditional exports, ESM/CJS), NPM.Platform (os/cpu/engines), NPM.Lifecycle
-- 31 Mix tasks: init install get remove list ls update outdated tree why info search run exec ci check clean cache config version link diff pack audit dedupe prune fund rebuild uninstall doctor
+## Critical Bug: Flat Resolution Cannot Handle Version Conflicts
+- **express@4.x fails to resolve** because `debug@2.6.9` needs `ms@2.0.0` and `send@0.19.0` needs `ms@2.1.3`
+- npm handles this via nested `node_modules` (multiple versions of same package)
+- PubGrub solver assumes one version per package (flat)
+- **Fix options**:
+  1. Pre-process deps: when a package has exact version pins (like `ms@2.0.0`), exclude it from the flat solve and handle it separately via nested node_modules
+  2. Implement a two-pass resolver: first solve ignoring exact pins, then nest conflicting exact versions
+  3. Use npm's own algorithm instead of PubGrub
+
+## Real npm Compatibility Gaps Found by Integration Tests
+- `*`, `""`, `latest` ranges now fixed (normalize to `>=0.0.0`)
+- Need to test: `x.x.x`, `1.x`, `1.2.x` range syntax via resolver (currently handled by npm_semver dep)
+- Need to test: pre-release version handling (`1.0.0-alpha.1`)
+- Need to test: `||` union ranges through the full resolver
 
 ## High-Value Pending Features
-- **`mix npm.publish`** — publish to npm registry with token auth (pack + upload tarball)
-- **Lockfile v2 format** — add checksums inline, faster verification
+- **Nested node_modules** — CRITICAL for real npm compat (blocks express, many real packages)
+- **`mix npm.publish`** — pack + upload tarball to registry
+- **Lockfile v2 format** — add checksums inline
+- **Progress bar** — show download progress
 - **`bundleDependencies` support** — handle bundled deps in tarballs
-- **Progress bar** — show download progress during multi-package fetch
-- **Nested node_modules** — create nested dirs when version conflicts exist (proper npm algorithm)
-- **NPM.Alias module** — package aliases (`npm:pkg@version` syntax)
-- **`mix npm.set`** — set config values in .npmrc
-- **`mix npm.token`** — manage auth tokens
-- **`mix npm.view`** — view registry info for any package (alias for npm.info with more fields)
-- **`install --ignore-scripts`** — explicit flag to skip lifecycle scripts
-- **`mix npm.shrinkwrap`** — create npm-shrinkwrap.json for publishing
-- **NPM.Semver integration tests** — test actual version constraint matching against known npm behaviors
+
+## Lower Priority
+- NPM.RegistryMirror, NPM.LockMerge, mix npm.import already partially implemented but uncommitted
+- mix npm.size, mix npm.stats, mix npm.verify already added
