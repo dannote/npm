@@ -4255,6 +4255,91 @@ defmodule NPMTest do
 
   # --- NPMSemver: additional ported edge cases ---
 
+  describe "Alias: real npm alias patterns" do
+    test "npm:react@^18 for multiple React versions" do
+      assert {:alias, "react", "^18.0.0"} = NPM.Alias.parse("npm:react@^18.0.0")
+    end
+
+    test "npm: scoped alias for forked packages" do
+      assert {:alias, "@babel/core", "7.0.0"} = NPM.Alias.parse("npm:@babel/core@7.0.0")
+    end
+
+    test "real_name extracts actual package for fetch" do
+      assert "react" = NPM.Alias.real_name("my-react", "npm:react@^18.0.0")
+    end
+
+    test "non-alias returns same name" do
+      assert "lodash" = NPM.Alias.real_name("lodash", "^4.17.0")
+    end
+  end
+
+  describe "PackageSpec: real specifier patterns from npm" do
+    test "npm install react" do
+      spec = NPM.PackageSpec.parse("react")
+      assert spec.name == "react"
+      assert spec.type == :registry
+      assert spec.range == nil
+    end
+
+    test "npm install react@^18.0.0" do
+      spec = NPM.PackageSpec.parse("react@^18.0.0")
+      assert spec.name == "react"
+      assert spec.range == "^18.0.0"
+    end
+
+    test "npm install @babel/core@7.0.0" do
+      spec = NPM.PackageSpec.parse("@babel/core@7.0.0")
+      assert spec.name == "@babel/core"
+      assert spec.range == "7.0.0"
+    end
+
+    test "npm install file:../local-pkg" do
+      spec = NPM.PackageSpec.parse("file:../local-pkg")
+      assert spec.type == :file
+    end
+
+    test "npm install github:user/repo" do
+      spec = NPM.PackageSpec.parse("github:user/repo")
+      assert spec.type == :git
+    end
+  end
+
+  describe "DepTree: real dependency graph traversal" do
+    test "finds all transitive deps" do
+      lockfile = %{
+        "express" => %{
+          version: "4.21.2",
+          integrity: "",
+          tarball: "",
+          dependencies: %{"debug" => "2.6.9", "cookie" => "0.7.1"}
+        },
+        "debug" => %{version: "2.6.9", integrity: "", tarball: "", dependencies: %{}},
+        "cookie" => %{version: "0.7.1", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      tree = NPM.DepTree.build(lockfile, %{"express" => "^4.21.0"})
+      all = NPM.DepTree.flatten(tree)
+      assert "express" in all
+      assert "debug" in all
+      assert "cookie" in all
+    end
+
+    test "depth is correct for deep chains" do
+      lockfile = %{
+        "a" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{"b" => "^1.0"}},
+        "b" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{"c" => "^1.0"}},
+        "c" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{"d" => "^1.0"}},
+        "d" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      tree = NPM.DepTree.build(lockfile, %{"a" => "^1.0"})
+      assert 0 = NPM.DepTree.depth(tree, "a")
+      assert 1 = NPM.DepTree.depth(tree, "b")
+      assert 2 = NPM.DepTree.depth(tree, "c")
+      assert 3 = NPM.DepTree.depth(tree, "d")
+    end
+  end
+
   describe "Lifecycle: real-world install script detection" do
     @tag :tmp_dir
     test "detects esbuild-style postinstall", %{tmp_dir: dir} do
