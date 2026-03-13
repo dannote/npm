@@ -4445,6 +4445,47 @@ defmodule NPMTest do
     end
   end
 
+  describe "PackageJSON: overrides reading" do
+    @tag :tmp_dir
+    test "reads overrides field", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      File.write!(path, ~s({
+        "dependencies": {"express": "^4.0"},
+        "overrides": {"ms": "2.1.3", "debug": "^4.0"}
+      }))
+
+      {:ok, overrides} = NPM.PackageJSON.read_overrides(path)
+      assert overrides["ms"] == "2.1.3"
+      assert overrides["debug"] == "^4.0"
+    end
+
+    @tag :tmp_dir
+    test "returns empty map when no overrides", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+      File.write!(path, ~s({"dependencies": {"lodash": "^4.0"}}))
+
+      {:ok, overrides} = NPM.PackageJSON.read_overrides(path)
+      assert overrides == %{}
+    end
+  end
+
+  describe "PackageJSON: peerDependencies reading" do
+    @tag :tmp_dir
+    test "read_all includes peer dependencies", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      File.write!(path, ~s({
+        "name": "my-plugin",
+        "dependencies": {"lodash": "^4.0"},
+        "peerDependencies": {"react": "^18.0"}
+      }))
+
+      {:ok, result} = NPM.PackageJSON.read_all(path)
+      assert result.dependencies["lodash"] == "^4.0"
+    end
+  end
+
   describe "Hooks: lifecycle hook configuration" do
     test "available lists known hook names" do
       hooks = NPM.Hooks.available()
