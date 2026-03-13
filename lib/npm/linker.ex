@@ -54,6 +54,8 @@ defmodule NPM.Linker do
       link_package(cache_path, target, strategy)
     end)
 
+    link_bins(node_modules_dir, tree)
+
     :ok
   end
 
@@ -131,6 +133,60 @@ defmodule NPM.Linker do
 
     if list_dir(scope_dir) == [], do: File.rmdir(scope_dir)
   end
+
+  @doc """
+  Create `node_modules/.bin/` symlinks for packages with `bin` entries.
+
+  Reads each package's `package.json` for the `bin` field and creates
+  executable symlinks in `.bin/`.
+  """
+  @spec link_bins(String.t(), [{String.t(), String.t()}]) :: :ok
+  def link_bins(node_modules_dir, tree) do
+    bin_dir = Path.join(node_modules_dir, ".bin")
+    bins = Enum.flat_map(tree, &read_package_bins(node_modules_dir, &1))
+
+    if bins != [] do
+      File.mkdir_p!(bin_dir)
+
+      Enum.each(bins, fn {command, target_path} ->
+        link = Path.join(bin_dir, command)
+        File.rm(link)
+        File.ln_s!(target_path, link)
+        File.chmod(target_path, 0o755)
+      end)
+    end
+  end
+
+  defp read_package_bins(node_modules_dir, {name, _version}) do
+    pkg_json_path = Path.join([node_modules_dir, name, "package.json"])
+
+    case File.read(pkg_json_path) do
+      {:ok, content} ->
+        data = :json.decode(content)
+        pkg_dir = Path.join(node_modules_dir, name)
+        parse_bin_field(data, pkg_dir)
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  defp parse_bin_field(%{"bin" => bin, "name" => name}, pkg_dir) when is_binary(bin) do
+    command =
+      if String.contains?(name, "/"), do: String.split(name, "/") |> List.last(), else: name
+
+    [{command, Path.expand(bin, pkg_dir)}]
+  end
+
+  defp parse_bin_field(%{"bin" => bin}, pkg_dir) when is_binary(bin) do
+    [{Path.basename(pkg_dir), Path.expand(bin, pkg_dir)}]
+  end
+
+  defp parse_bin_field(%{"bin" => bin}, pkg_dir) when is_map(bin) do
+    Enum.map(bin, fn {command, path} -> {command, Path.expand(path, pkg_dir)} end)
+  end
+
+  defp parse_bin_field(_data, _pkg_dir), do: []
 
   defp list_dir(path) do
     case File.ls(path) do

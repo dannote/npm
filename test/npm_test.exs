@@ -687,6 +687,85 @@ defmodule NPMTest do
     end
   end
 
+  # --- Linker.link_bins ---
+
+  describe "Linker.link_bins" do
+    @tag :tmp_dir
+    test "creates .bin symlinks for string bin field", %{tmp_dir: dir} do
+      nm_dir = Path.join(dir, "node_modules")
+      pkg_dir = Path.join(nm_dir, "my-tool")
+      File.mkdir_p!(pkg_dir)
+      File.write!(Path.join(pkg_dir, "package.json"), ~s({"name":"my-tool","bin":"./cli.js"}))
+      File.write!(Path.join(pkg_dir, "cli.js"), "#!/usr/bin/env node\nconsole.log('hi')")
+
+      NPM.Linker.link_bins(nm_dir, [{"my-tool", "1.0.0"}])
+
+      link = Path.join([nm_dir, ".bin", "my-tool"])
+      assert File.exists?(link)
+      {:ok, info} = File.lstat(link)
+      assert info.type == :symlink
+    end
+
+    @tag :tmp_dir
+    test "creates .bin symlinks for map bin field", %{tmp_dir: dir} do
+      nm_dir = Path.join(dir, "node_modules")
+      pkg_dir = Path.join(nm_dir, "multi-tool")
+      File.mkdir_p!(pkg_dir)
+
+      File.write!(
+        Path.join(pkg_dir, "package.json"),
+        ~s({"name":"multi-tool","bin":{"cmd-a":"./a.js","cmd-b":"./b.js"}})
+      )
+
+      File.write!(Path.join(pkg_dir, "a.js"), "#!/usr/bin/env node")
+      File.write!(Path.join(pkg_dir, "b.js"), "#!/usr/bin/env node")
+
+      NPM.Linker.link_bins(nm_dir, [{"multi-tool", "1.0.0"}])
+
+      assert File.exists?(Path.join([nm_dir, ".bin", "cmd-a"]))
+      assert File.exists?(Path.join([nm_dir, ".bin", "cmd-b"]))
+    end
+
+    @tag :tmp_dir
+    test "skips packages without bin field", %{tmp_dir: dir} do
+      nm_dir = Path.join(dir, "node_modules")
+      pkg_dir = Path.join(nm_dir, "no-bin")
+      File.mkdir_p!(pkg_dir)
+      File.write!(Path.join(pkg_dir, "package.json"), ~s({"name":"no-bin"}))
+
+      NPM.Linker.link_bins(nm_dir, [{"no-bin", "1.0.0"}])
+
+      refute File.exists?(Path.join([nm_dir, ".bin"]))
+    end
+
+    @tag :tmp_dir
+    test "sets executable permissions on targets", %{tmp_dir: dir} do
+      nm_dir = Path.join(dir, "node_modules")
+      pkg_dir = Path.join(nm_dir, "exec-tool")
+      File.mkdir_p!(pkg_dir)
+      File.write!(Path.join(pkg_dir, "package.json"), ~s({"name":"exec-tool","bin":"./run.js"}))
+      File.write!(Path.join(pkg_dir, "run.js"), "#!/usr/bin/env node")
+
+      NPM.Linker.link_bins(nm_dir, [{"exec-tool", "1.0.0"}])
+
+      {:ok, stat} = File.stat(Path.join(pkg_dir, "run.js"))
+      assert Bitwise.band(stat.mode, 0o111) != 0
+    end
+
+    @tag :tmp_dir
+    test "handles scoped packages", %{tmp_dir: dir} do
+      nm_dir = Path.join(dir, "node_modules")
+      pkg_dir = Path.join([nm_dir, "@scope", "tool"])
+      File.mkdir_p!(pkg_dir)
+      File.write!(Path.join(pkg_dir, "package.json"), ~s({"name":"@scope/tool","bin":"./cli.js"}))
+      File.write!(Path.join(pkg_dir, "cli.js"), "#!/usr/bin/env node")
+
+      NPM.Linker.link_bins(nm_dir, [{"@scope/tool", "1.0.0"}])
+
+      assert File.exists?(Path.join([nm_dir, ".bin", "tool"]))
+    end
+  end
+
   # --- Linker.prune ---
 
   describe "Linker.prune" do
