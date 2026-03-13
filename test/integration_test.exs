@@ -739,6 +739,51 @@ defmodule NPM.IntegrationTest do
     end
   end
 
+  describe "npm compatibility: Exports field on real packages" do
+    test "chalk 5.x has type: module" do
+      raw = get_raw_packument("chalk")
+      v5 = raw["versions"]["5.4.1"]
+      assert v5["type"] == "module"
+    end
+
+    test "is-number has main field" do
+      raw = get_raw_packument("is-number")
+      v7 = raw["versions"]["7.0.0"]
+      assert is_binary(v7["main"])
+    end
+  end
+
+  describe "npm compatibility: resolution determinism" do
+    setup do
+      NPM.Resolver.clear_cache()
+      :ok
+    end
+
+    test "same inputs produce same outputs" do
+      deps = %{"depd" => "^2.0.0", "mime-types" => "^2.1.34"}
+      {:ok, result1} = NPM.Resolver.resolve(deps)
+
+      NPM.Resolver.clear_cache()
+      {:ok, result2} = NPM.Resolver.resolve(deps)
+
+      assert result1 == result2
+    end
+  end
+
+  describe "npm compatibility: Validator with real package names" do
+    test "validates real package names" do
+      assert :ok = NPM.Validator.validate_name("lodash")
+      assert :ok = NPM.Validator.validate_name("is-number")
+      assert :ok = NPM.Validator.validate_name("@types/node")
+    end
+
+    test "rejects obviously invalid names" do
+      assert {:error, _} = NPM.Validator.validate_name("")
+      assert {:error, _} = NPM.Validator.validate_name(".hidden")
+      assert {:error, _} = NPM.Validator.validate_name("_underscore")
+    end
+  end
+
   # --- Helpers ---
 
   defp parse_version(version_str) do

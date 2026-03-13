@@ -106,19 +106,15 @@ defmodule NPM.Resolver do
     # Delete excluded packages entirely from the cache
     Enum.each(excluded, &:ets.delete(@table, &1))
 
-    # Strip excluded deps from all cached packuments
+    # Strip excluded deps from all cached packuments (skip non-packument entries)
     :ets.foldl(
       fn
-        {key, _}, acc when is_atom(key) ->
+        {_name, %{versions: _} = packument} = entry, acc ->
+          stripped = strip_deps(packument, excluded)
+          if stripped != packument, do: :ets.insert(@table, put_elem(entry, 1, stripped))
           acc
 
-        {name, packument}, acc ->
-          stripped = strip_deps(packument, excluded)
-
-          if stripped != packument do
-            :ets.insert(@table, {name, stripped})
-          end
-
+        _, acc ->
           acc
       end,
       :ok,
