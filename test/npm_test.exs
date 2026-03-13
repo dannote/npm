@@ -4741,6 +4741,46 @@ defmodule NPMTest do
     end
   end
 
+  describe "EnvCheck: engine checks" do
+    test "check_engines with node requirement" do
+      result = NPM.EnvCheck.check_engines(%{"node" => ">=14.0.0"})
+      # Either :ok (if node is present and >= 14) or {:warn, _}
+      assert result == :ok or match?({:warn, _}, result)
+    end
+  end
+
+  describe "Manifest: license and files fields" do
+    test "from_json reads license" do
+      m = NPM.Manifest.from_json(~s({"name": "pkg", "license": "MIT"}))
+      assert m.license == "MIT"
+    end
+
+    test "from_json reads files array" do
+      m = NPM.Manifest.from_json(~s({"name": "pkg", "files": ["lib/", "index.js"]}))
+      assert m.files == ["lib/", "index.js"]
+    end
+
+    test "from_json reads exports map" do
+      m = NPM.Manifest.from_json(~s({"name": "pkg", "exports": {".": "./index.js"}}))
+      assert m.exports == %{"." => "./index.js"}
+    end
+
+    test "from_json reads engines" do
+      m = NPM.Manifest.from_json(~s({"name": "pkg", "engines": {"node": ">=18"}}))
+      assert m.engines["node"] == ">=18"
+    end
+  end
+
+  describe "Validator: name length edge cases" do
+    test "exact 214 chars is valid" do
+      assert :ok = NPM.Validator.validate_name(String.duplicate("a", 214))
+    end
+
+    test "215 chars is invalid" do
+      assert {:error, _} = NPM.Validator.validate_name(String.duplicate("a", 215))
+    end
+  end
+
   describe "Hooks: configured hooks" do
     @tag :tmp_dir
     test "configured reads from package.json", %{tmp_dir: dir} do
