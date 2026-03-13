@@ -4741,6 +4741,60 @@ defmodule NPMTest do
     end
   end
 
+  describe "Resolver: empty resolution" do
+    test "empty deps returns empty map" do
+      NPM.Resolver.clear_cache()
+      {:ok, result} = NPM.Resolver.resolve(%{})
+      assert result == %{}
+    end
+
+    test "resolve with overrides option doesn't crash on empty" do
+      NPM.Resolver.clear_cache()
+      {:ok, result} = NPM.Resolver.resolve(%{}, overrides: %{"pkg" => "1.0.0"})
+      assert result == %{}
+    end
+  end
+
+  describe "PackageJSON: read_all structure" do
+    @tag :tmp_dir
+    test "read_all returns all dep types", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      File.write!(path, ~s({
+        "name": "full-pkg",
+        "dependencies": {"a": "^1.0"},
+        "devDependencies": {"b": "^2.0"},
+        "optionalDependencies": {"c": "^3.0"}
+      }))
+
+      {:ok, result} = NPM.PackageJSON.read_all(path)
+      assert is_map(result.dependencies)
+      assert is_map(result.dev_dependencies)
+      assert is_map(result.optional_dependencies)
+      assert result.dependencies["a"] == "^1.0"
+      assert result.dev_dependencies["b"] == "^2.0"
+      assert result.optional_dependencies["c"] == "^3.0"
+    end
+
+    @tag :tmp_dir
+    test "read_all defaults empty maps for missing sections", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+      File.write!(path, ~s({"name": "minimal"}))
+
+      {:ok, result} = NPM.PackageJSON.read_all(path)
+      assert result.dependencies == %{}
+      assert result.dev_dependencies == %{}
+      assert result.optional_dependencies == %{}
+    end
+  end
+
+  describe "ScopeRegistry: all_scopes" do
+    test "returns empty map with no config" do
+      scopes = NPM.ScopeRegistry.all_scopes()
+      assert is_map(scopes)
+    end
+  end
+
   describe "EnvCheck: environment detection" do
     test "summary returns all expected keys" do
       info = NPM.EnvCheck.summary()
