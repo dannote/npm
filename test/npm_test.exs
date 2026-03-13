@@ -8586,6 +8586,164 @@ defmodule NPMTest do
     end
   end
 
+  # --- PackageJSON: read_all comprehensive ---
+
+  describe "PackageJSON: read_all returns structured data" do
+    @tag :tmp_dir
+    test "returns deps, dev_deps, optional_deps", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      File.write!(path, ~s({
+        "name": "full-pkg",
+        "version": "2.0.0",
+        "dependencies": {"a": "^1"},
+        "devDependencies": {"b": "^2"},
+        "optionalDependencies": {"d": "^4"}
+      }))
+
+      {:ok, data} = NPM.PackageJSON.read_all(path)
+      assert data.dependencies["a"] == "^1"
+      assert data.dev_dependencies["b"] == "^2"
+      assert data.optional_dependencies["d"] == "^4"
+    end
+  end
+
+  # --- Tarball: extract from tgz ---
+
+  describe "Tarball: extract from tgz data" do
+    @tag :tmp_dir
+    test "extracts files from tgz to directory", %{tmp_dir: dir} do
+      tgz_data =
+        create_test_tgz([
+          {"package/index.js", "console.log('hello')"},
+          {"package/package.json", ~s({"name":"test"})}
+        ])
+
+      dest = Path.join(dir, "extracted")
+      File.mkdir_p!(dest)
+      NPM.Tarball.extract(tgz_data, dest)
+
+      assert File.exists?(Path.join(dest, "index.js")) or
+               File.exists?(Path.join(dest, "package/index.js"))
+    end
+  end
+
+  # --- SemverUtil: min_satisfying ---
+
+  describe "SemverUtil: min_satisfying with >= range" do
+    test "finds minimum satisfying version" do
+      versions = ["1.0.0", "1.5.0", "2.0.0", "3.0.0"]
+      {:ok, v} = NPM.SemverUtil.min_satisfying(versions, ">=1.5.0")
+      assert v == "1.5.0"
+    end
+
+    test "returns error when no version satisfies" do
+      versions = ["1.0.0", "2.0.0"]
+      result = NPM.SemverUtil.min_satisfying(versions, ">=5.0.0")
+      assert result == :none
+    end
+  end
+
+  # --- Config: registry and auth_token ---
+
+  describe "Config: registry and auth_token" do
+    test "registry returns a URL string" do
+      url = NPM.Config.registry()
+      assert is_binary(url)
+      assert String.starts_with?(url, "https://")
+    end
+
+    test "auth_token returns nil or string" do
+      token = NPM.Config.auth_token()
+      assert is_nil(token) or is_binary(token)
+    end
+  end
+
+  # --- Packager: files_to_pack exclusions ---
+
+  describe "Packager: files_to_pack excludes node_modules" do
+    @tag :tmp_dir
+    test "node_modules directory is excluded", %{tmp_dir: dir} do
+      File.write!(Path.join(dir, "package.json"), ~s({"name":"t"}))
+      File.write!(Path.join(dir, "index.js"), "module.exports = {}")
+      nm = Path.join(dir, "node_modules")
+      File.mkdir_p!(Path.join(nm, "dep"))
+      File.write!(Path.join([nm, "dep", "index.js"]), "nope")
+
+      files = NPM.Packager.files_to_pack(dir)
+      refute Enum.any?(files, &String.contains?(&1, "node_modules"))
+    end
+  end
+
+  # --- Alias: is_alias? detection ---
+
+  describe "Alias: alias? detection" do
+    test "npm: prefix is alias" do
+      assert NPM.Alias.alias?("npm:react@^18")
+    end
+
+    test "semver range is not alias" do
+      refute NPM.Alias.alias?("^1.0.0")
+    end
+
+    test "git URL is not alias" do
+      refute NPM.Alias.alias?("git+https://github.com/user/repo")
+    end
+  end
+
+  # --- PackageSpec: additional parse patterns ---
+
+  describe "PackageSpec: parse URL spec" do
+    test "https tarball URL" do
+      spec = NPM.PackageSpec.parse("https://registry.npmjs.org/react/-/react-18.2.0.tgz")
+      assert spec.type == :url
+    end
+  end
+
+  describe "PackageSpec: parse file spec" do
+    test "file: prefix" do
+      spec = NPM.PackageSpec.parse("file:./local-pkg")
+      assert spec.type == :file
+    end
+  end
+
+  # --- LockMerge: diff with identical lockfiles ---
+
+  describe "LockMerge: diff with identical lockfiles" do
+    test "no changes detected" do
+      lockfile = %{
+        "a" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      {added, removed, changed} = NPM.LockMerge.diff(lockfile, lockfile)
+      assert added == []
+      assert removed == []
+      assert changed == []
+    end
+  end
+
+  # --- VersionUtil: sort stability ---
+
+  describe "VersionUtil: sort with duplicates" do
+    test "preserves duplicate entries" do
+      versions = ["1.0.0", "2.0.0", "1.0.0", "3.0.0"]
+      sorted = NPM.VersionUtil.sort(versions)
+      assert Enum.count(sorted, &(&1 == "1.0.0")) == 2
+    end
+  end
+
+  # --- Integrity: compute_sha512 ---
+
+  describe "Integrity: compute_sha512 consistency" do
+    test "sha512 of same data is deterministic" do
+      data = "hash-test-data"
+      h1 = NPM.Integrity.compute_sha512(data)
+      h2 = NPM.Integrity.compute_sha512(data)
+      assert h1 == h2
+      assert String.starts_with?(h1, "sha512-")
+    end
+  end
+
   # --- Helpers ---
 
   defp mask_token(token) when byte_size(token) <= 8, do: "****"
