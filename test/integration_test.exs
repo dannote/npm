@@ -820,6 +820,54 @@ defmodule NPM.IntegrationTest do
     end
   end
 
+  describe "npm compatibility: multi-package flat resolution" do
+    setup do
+      NPM.Resolver.clear_cache()
+      :ok
+    end
+
+    test "resolves multiple related packages without conflicts" do
+      deps = %{"mime-types" => "^2.1.34", "content-type" => "^1.0.5"}
+      {:ok, result} = NPM.Resolver.resolve(deps)
+
+      assert result["mime-types"] =~ ~r/^2\.\d+\.\d+$/
+      assert result["content-type"] =~ ~r/^1\.\d+\.\d+$/
+      # mime-types depends on mime-db, which should also be resolved
+      assert Map.has_key?(result, "mime-db")
+    end
+  end
+
+  describe "npm compatibility: lockfile round-trip with real packages" do
+    setup do
+      NPM.Resolver.clear_cache()
+      :ok
+    end
+
+    test "resolve -> lockfile -> read preserves all entries" do
+      deps = %{"depd" => "^2.0.0", "cookie" => "^0.7.0"}
+      {:ok, resolved} = NPM.Resolver.resolve(deps)
+
+      flat = Map.delete(resolved, :nested)
+
+      lockfile =
+        Map.new(flat, fn {name, version} ->
+          {name,
+           %{version: version, integrity: "sha512-test", tarball: "test-url", dependencies: %{}}}
+        end)
+
+      tmp_path = Path.join(System.tmp_dir!(), "npm_test_lockfile_#{:rand.uniform(100_000)}.lock")
+      NPM.Lockfile.write(lockfile, tmp_path)
+      {:ok, restored} = NPM.Lockfile.read(tmp_path)
+      File.rm(tmp_path)
+
+      assert map_size(restored) == map_size(lockfile)
+
+      Enum.each(lockfile, fn {name, entry} ->
+        assert restored[name].version == entry.version
+      end)
+    end
+  end
+
   describe "npm compatibility: Validator with real package names" do
     test "validates real package names" do
       assert :ok = NPM.Validator.validate_name("lodash")
