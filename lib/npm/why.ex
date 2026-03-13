@@ -89,9 +89,9 @@ defmodule NPM.Why do
       [[target]]
     else
       lockfile
-      |> Enum.filter(fn {_name, entry} ->
+      |> Enum.filter(fn {name, entry} ->
         Map.has_key?(entry.dependencies, target) and
-          not MapSet.member?(visited, _name)
+          not MapSet.member?(visited, name)
       end)
       |> Enum.flat_map(fn {parent, _entry} ->
         find_paths_to(parent, lockfile, root_deps, MapSet.put(visited, parent))
