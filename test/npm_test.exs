@@ -2688,6 +2688,106 @@ defmodule NPMTest do
     end
   end
 
+  # --- Hooks ---
+
+  describe "Hooks.available" do
+    test "lists all hook points" do
+      hooks = NPM.Hooks.available()
+      assert :pre_install in hooks
+      assert :post_install in hooks
+      assert :pre_resolve in hooks
+      assert :post_resolve in hooks
+    end
+  end
+
+  describe "Hooks.configured" do
+    test "returns empty map by default" do
+      assert is_map(NPM.Hooks.configured())
+    end
+  end
+
+  describe "Hooks.configured?" do
+    test "false for unconfigured hook" do
+      refute NPM.Hooks.configured?(:pre_install)
+    end
+  end
+
+  describe "Hooks.run" do
+    test "succeeds for unconfigured hook" do
+      assert :ok = NPM.Hooks.run(:pre_install)
+    end
+
+    test "succeeds with context" do
+      assert :ok = NPM.Hooks.run(:post_install, packages: 5)
+    end
+  end
+
+  # --- Format ---
+
+  describe "Format.bytes" do
+    test "formats bytes" do
+      assert "500 B" = NPM.Format.bytes(500)
+    end
+
+    test "formats kilobytes" do
+      assert "1.5 KB" = NPM.Format.bytes(1536)
+    end
+
+    test "formats megabytes" do
+      assert "10.0 MB" = NPM.Format.bytes(10_485_760)
+    end
+
+    test "formats gigabytes" do
+      assert "1.0 GB" = NPM.Format.bytes(1_073_741_824)
+    end
+  end
+
+  describe "Format.duration" do
+    test "formats microseconds" do
+      assert "500µs" = NPM.Format.duration(500)
+    end
+
+    test "formats milliseconds" do
+      assert "150ms" = NPM.Format.duration(150_000)
+    end
+
+    test "formats seconds" do
+      assert "2.5s" = NPM.Format.duration(2_500_000)
+    end
+  end
+
+  describe "Format.package" do
+    test "formats name@version" do
+      assert "lodash@4.17.21" = NPM.Format.package("lodash", "4.17.21")
+    end
+  end
+
+  describe "Format.pluralize" do
+    test "singular" do
+      assert "1 package" = NPM.Format.pluralize(1, "package", "packages")
+    end
+
+    test "plural" do
+      assert "5 packages" = NPM.Format.pluralize(5, "package", "packages")
+    end
+
+    test "zero" do
+      assert "0 packages" = NPM.Format.pluralize(0, "package", "packages")
+    end
+  end
+
+  describe "Format.truncate" do
+    test "short string unchanged" do
+      assert "hi" = NPM.Format.truncate("hi", 10)
+    end
+
+    test "long string truncated" do
+      result = NPM.Format.truncate("this is a very long string", 10)
+      assert String.ends_with?(result, "...")
+      assert byte_size(result) <= 10
+    end
+  end
+
   # --- RegistryMirror ---
 
   describe "RegistryMirror.known_mirrors" do
