@@ -1810,6 +1810,98 @@ defmodule NPMTest do
     end
   end
 
+  # --- Scoped package operations ---
+
+  describe "scoped package operations" do
+    @tag :tmp_dir
+    test "add and remove scoped dev dependency", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      NPM.PackageJSON.add_dep("@types/react", "^18.0", path, dev: true)
+
+      {:ok, %{dev_dependencies: dev_deps}} = NPM.PackageJSON.read_all(path)
+      assert dev_deps["@types/react"] == "^18.0"
+
+      NPM.PackageJSON.remove_dep("@types/react", path)
+
+      {:ok, %{dev_dependencies: dev_deps2}} = NPM.PackageJSON.read_all(path)
+      assert dev_deps2 == %{}
+    end
+
+    @tag :tmp_dir
+    test "scoped packages in lockfile round-trip", %{tmp_dir: dir} do
+      path = Path.join(dir, "npm.lock")
+
+      lockfile = %{
+        "@babel/core" => %{
+          version: "7.24.0",
+          integrity: "sha512-abc==",
+          tarball: "https://registry.npmjs.org/@babel/core/-/core-7.24.0.tgz",
+          dependencies: %{"@babel/parser" => "^7.24.0"}
+        },
+        "@babel/parser" => %{
+          version: "7.24.1",
+          integrity: "sha512-def==",
+          tarball: "https://registry.npmjs.org/@babel/parser/-/parser-7.24.1.tgz",
+          dependencies: %{}
+        }
+      }
+
+      NPM.Lockfile.write(lockfile, path)
+      {:ok, read_back} = NPM.Lockfile.read(path)
+
+      assert read_back["@babel/core"].version == "7.24.0"
+      assert read_back["@babel/core"].dependencies["@babel/parser"] == "^7.24.0"
+      assert read_back["@babel/parser"].version == "7.24.1"
+    end
+  end
+
+  # --- Linker with scoped packages full flow ---
+
+  describe "Linker scoped packages full flow" do
+    @tag :tmp_dir
+    test "links scoped packages with copy strategy", %{tmp_dir: dir} do
+      cache_dir = Path.join(dir, "cache")
+      nm_dir = Path.join(dir, "node_modules")
+
+      setup_cached_package(cache_dir, "@scope/pkg", "1.0.0", %{
+        "package.json" => ~s({"name":"@scope/pkg","version":"1.0.0"}),
+        "index.js" => "exports.ok = true"
+      })
+
+      lockfile = %{
+        "@scope/pkg" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      System.put_env("NPM_EX_CACHE_DIR", cache_dir)
+      NPM.Linker.link(lockfile, nm_dir, :copy)
+      System.delete_env("NPM_EX_CACHE_DIR")
+
+      assert File.exists?(Path.join([nm_dir, "@scope", "pkg", "package.json"]))
+      assert File.read!(Path.join([nm_dir, "@scope", "pkg", "index.js"])) == "exports.ok = true"
+    end
+  end
+
+  # --- Validator edge cases ---
+
+  describe "Validator additional cases" do
+    test "accepts hyphenated name" do
+      assert :ok = NPM.Validator.validate_name("my-cool-package")
+    end
+
+    test "accepts dotted name in middle" do
+      assert :ok = NPM.Validator.validate_name("pkg.utils")
+    end
+
+    test "accepts numeric name" do
+      assert :ok = NPM.Validator.validate_name("123")
+    end
+
+    test "validate_range with 1.0.0" do
+      assert :ok = NPM.Validator.validate_range("1.0.0")
+    end
+  end
+
   # --- Helpers ---
 
   defp create_test_tgz(files) do

@@ -69,6 +69,7 @@ defmodule NPM.Linker do
   end
 
   defp link_package(source, target, :copy) do
+    File.mkdir_p!(Path.dirname(target))
     File.rm_rf!(target)
     File.cp_r!(source, target)
   end
