@@ -4834,6 +4834,49 @@ defmodule NPMTest do
     end
   end
 
+  describe "SemverUtil: max_satisfying with tilde ranges" do
+    test "tilde constrains to patch versions" do
+      versions = ["1.2.0", "1.2.5", "1.3.0", "2.0.0"]
+      {:ok, best} = NPM.SemverUtil.max_satisfying(versions, "~1.2.0")
+      assert best == "1.2.5"
+    end
+  end
+
+  describe "SemverUtil: max_satisfying with exact version" do
+    test "exact version matches only that version" do
+      versions = ["1.0.0", "1.0.1", "2.0.0"]
+      {:ok, best} = NPM.SemverUtil.max_satisfying(versions, "1.0.0")
+      assert best == "1.0.0"
+    end
+  end
+
+  describe "LockMerge: diff with version changes" do
+    test "diff detects only version changes, not identical entries" do
+      base = %{
+        "a" => %{version: "1.0.0", integrity: "sha-old", tarball: "url1", dependencies: %{}},
+        "b" => %{version: "2.0.0", integrity: "sha-same", tarball: "url2", dependencies: %{}}
+      }
+
+      newer = %{
+        "a" => %{version: "1.0.1", integrity: "sha-new", tarball: "url3", dependencies: %{}},
+        "b" => %{version: "2.0.0", integrity: "sha-same", tarball: "url2", dependencies: %{}}
+      }
+
+      {added, removed, changed} = NPM.LockMerge.diff(base, newer)
+      assert added == []
+      assert removed == []
+      assert changed == [{"a", "1.0.0", "1.0.1"}]
+    end
+  end
+
+  describe "Resolver: clear_cache" do
+    test "clear_cache doesn't crash when called twice" do
+      NPM.Resolver.clear_cache()
+      NPM.Resolver.clear_cache()
+      assert {:ok, %{}} = NPM.Resolver.resolve(%{})
+    end
+  end
+
   describe "BinResolver: symlink resolution" do
     @tag :tmp_dir
     test "find resolves symlink targets", %{tmp_dir: dir} do
