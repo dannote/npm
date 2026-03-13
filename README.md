@@ -11,7 +11,7 @@ Resolve, fetch, cache, and link npm packages directly from Mix.
 
 ```elixir
 def deps do
-  [{:npm, "~> 0.3.0"}]
+  [{:npm, "~> 0.4.0"}]
 end
 ```
 

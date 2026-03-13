@@ -10,54 +10,54 @@ defmodule NPM.CveTest do
 
   describe "extract_cves" do
     test "extracts from cves array" do
-      assert ["CVE-2021-23337"] = NPM.Cve.extract_cves(%{"cves" => ["CVE-2021-23337"]})
+      assert ["CVE-2021-23337"] = NPM.CVE.extract_cves(%{"cves" => ["CVE-2021-23337"]})
     end
 
     test "extracts from cve string" do
-      assert ["CVE-2021-23337"] = NPM.Cve.extract_cves(%{"cve" => "CVE-2021-23337"})
+      assert ["CVE-2021-23337"] = NPM.CVE.extract_cves(%{"cve" => "CVE-2021-23337"})
     end
 
     test "extracts from references text" do
       refs = "See https://nvd.nist.gov/vuln/detail/CVE-2021-23337 for details"
-      assert ["CVE-2021-23337"] = NPM.Cve.extract_cves(%{"references" => refs})
+      assert ["CVE-2021-23337"] = NPM.CVE.extract_cves(%{"references" => refs})
     end
 
     test "empty when no CVEs" do
-      assert [] = NPM.Cve.extract_cves(%{"title" => "advisory"})
+      assert [] = NPM.CVE.extract_cves(%{"title" => "advisory"})
     end
   end
 
   describe "compare_severity" do
     test "critical > high" do
-      assert :gt = NPM.Cve.compare_severity("critical", "high")
+      assert :gt = NPM.CVE.compare_severity("critical", "high")
     end
 
     test "low < moderate" do
-      assert :lt = NPM.Cve.compare_severity("low", "moderate")
+      assert :lt = NPM.CVE.compare_severity("low", "moderate")
     end
 
     test "same severity" do
-      assert :eq = NPM.Cve.compare_severity("high", "high")
+      assert :eq = NPM.CVE.compare_severity("high", "high")
     end
   end
 
   describe "max_severity" do
     test "returns highest severity" do
-      assert "critical" = NPM.Cve.max_severity(@advisories)
+      assert "critical" = NPM.CVE.max_severity(@advisories)
     end
 
     test "none for empty list" do
-      assert "none" = NPM.Cve.max_severity([])
+      assert "none" = NPM.CVE.max_severity([])
     end
 
     test "single advisory" do
-      assert "moderate" = NPM.Cve.max_severity([%{"severity" => "moderate"}])
+      assert "moderate" = NPM.CVE.max_severity([%{"severity" => "moderate"}])
     end
   end
 
   describe "group_by_package" do
     test "groups advisories by package" do
-      grouped = NPM.Cve.group_by_package(@advisories)
+      grouped = NPM.CVE.group_by_package(@advisories)
       assert length(grouped["lodash"]) == 2
       assert length(grouped["minimist"]) == 1
     end
@@ -65,7 +65,7 @@ defmodule NPM.CveTest do
 
   describe "severity_counts" do
     test "counts by severity" do
-      counts = NPM.Cve.severity_counts(@advisories)
+      counts = NPM.CVE.severity_counts(@advisories)
       assert counts["critical"] == 1
       assert counts["high"] == 1
       assert counts["moderate"] == 1
@@ -73,35 +73,35 @@ defmodule NPM.CveTest do
     end
 
     test "empty list" do
-      assert %{} = NPM.Cve.severity_counts([])
+      assert %{} = NPM.CVE.severity_counts([])
     end
   end
 
   describe "above_threshold?" do
     test "true when critical exists above moderate threshold" do
-      assert NPM.Cve.above_threshold?(@advisories, "moderate")
+      assert NPM.CVE.above_threshold?(@advisories, "moderate")
     end
 
     test "false when all below threshold" do
       low_only = [%{"severity" => "low"}]
-      refute NPM.Cve.above_threshold?(low_only, "high")
+      refute NPM.CVE.above_threshold?(low_only, "high")
     end
 
     test "true for exact threshold match" do
-      assert NPM.Cve.above_threshold?([%{"severity" => "high"}], "high")
+      assert NPM.CVE.above_threshold?([%{"severity" => "high"}], "high")
     end
   end
 
   describe "format_summary" do
     test "formats vulnerability counts" do
-      formatted = NPM.Cve.format_summary(@advisories)
+      formatted = NPM.CVE.format_summary(@advisories)
       assert formatted =~ "4 vulnerabilities"
       assert formatted =~ "1 critical"
       assert formatted =~ "1 high"
     end
 
     test "no vulnerabilities message" do
-      assert "No known vulnerabilities." = NPM.Cve.format_summary([])
+      assert "No known vulnerabilities." = NPM.CVE.format_summary([])
     end
   end
 end

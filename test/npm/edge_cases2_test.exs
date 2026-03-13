@@ -80,18 +80,18 @@ defmodule NPM.EdgeCases2Test do
   describe "Cve edge cases" do
     test "extract multiple CVEs from references" do
       refs = "CVE-2021-23337 and CVE-2020-28500 are related"
-      cves = NPM.Cve.extract_cves(%{"references" => refs})
+      cves = NPM.CVE.extract_cves(%{"references" => refs})
       assert length(cves) == 2
     end
 
     test "severity_counts with all same severity" do
       advs = [%{"severity" => "high"}, %{"severity" => "high"}]
-      counts = NPM.Cve.severity_counts(advs)
+      counts = NPM.CVE.severity_counts(advs)
       assert counts["high"] == 2
     end
 
     test "above_threshold with empty list" do
-      refute NPM.Cve.above_threshold?([], "high")
+      refute NPM.CVE.above_threshold?([], "high")
     end
   end
 
