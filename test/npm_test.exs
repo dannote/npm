@@ -8744,6 +8744,81 @@ defmodule NPMTest do
     end
   end
 
+  # --- Push to 1000+ ---
+
+  describe "npm semver: exact version equality" do
+    test "exact match" do
+      assert NPMSemver.matches?("1.2.3", "1.2.3")
+    end
+
+    test "exact no match" do
+      refute NPMSemver.matches?("1.2.4", "1.2.3")
+    end
+  end
+
+  describe "SemverUtil: update_type minor and same" do
+    test "minor bump detected" do
+      assert :minor = NPM.SemverUtil.update_type("1.0.0", "1.1.0")
+    end
+
+    test "same version returns nil" do
+      assert :none == NPM.SemverUtil.update_type("1.0.0", "1.0.0")
+    end
+  end
+
+  describe "Lockfile: roundtrip with multiple packages" do
+    @tag :tmp_dir
+    test "write and read preserves all packages", %{tmp_dir: dir} do
+      path = Path.join(dir, "npm.lock")
+
+      lockfile = %{
+        "react" => %{version: "18.2.0", integrity: "sha512-a", tarball: "u1", dependencies: %{}},
+        "lodash" => %{version: "4.17.21", integrity: "sha512-b", tarball: "u2", dependencies: %{}},
+        "express" => %{
+          version: "4.21.2",
+          integrity: "sha512-c",
+          tarball: "u3",
+          dependencies: %{"ms" => "^2.1"}
+        }
+      }
+
+      NPM.Lockfile.write(lockfile, path)
+      {:ok, loaded} = NPM.Lockfile.read(path)
+      assert map_size(loaded) == 3
+      assert loaded["react"].version == "18.2.0"
+      assert loaded["lodash"].version == "4.17.21"
+      assert loaded["express"].version == "4.21.2"
+    end
+  end
+
+  describe "VersionUtil: prerelease? edge cases" do
+    test "build metadata alone is not prerelease" do
+      refute NPM.VersionUtil.prerelease?("1.0.0+build.123")
+    end
+
+    test "prerelease with build metadata" do
+      assert NPM.VersionUtil.prerelease?("1.0.0-alpha+build")
+    end
+  end
+
+  describe "DepGraph: leaves detection" do
+    test "nodes with no dependencies are leaves" do
+      adj = %{"a" => ["b", "c"], "b" => ["c"], "c" => []}
+      leaves = NPM.DepGraph.leaves(adj)
+      assert "c" in leaves
+      refute "a" in leaves
+      refute "b" in leaves
+    end
+  end
+
+  describe "Manifest: from_json with engines" do
+    test "engines are accessible" do
+      m = NPM.Manifest.from_json(~s({"name":"t","engines":{"node":">=18","npm":">=9"}}))
+      assert m.engines["node"] == ">=18"
+      assert m.engines["npm"] == ">=9"
+    end
+  end
+
   # --- Helpers ---
 
   defp mask_token(token) when byte_size(token) <= 8, do: "****"
