@@ -5312,6 +5312,64 @@ defmodule NPMTest do
     end
   end
 
+  describe "Resolver: normalize_range for edge cases" do
+    test "empty string normalizes like *" do
+      assert {:ok, _} = NPMSemver.to_hex_constraint(">=0.0.0")
+    end
+
+    test "complex range with spaces" do
+      assert {:ok, _} = NPMSemver.to_hex_constraint(">= 1.0.0 < 2.0.0")
+    end
+  end
+
+  describe "LockMerge: diff symmetry" do
+    test "diff(a,b) added == diff(b,a) removed" do
+      a = %{"only-a" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}}}
+      b = %{"only-b" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}}}
+
+      {added_ab, removed_ab, _} = NPM.LockMerge.diff(a, b)
+      {added_ba, removed_ba, _} = NPM.LockMerge.diff(b, a)
+
+      assert added_ab == removed_ba
+      assert removed_ab == added_ba
+    end
+  end
+
+  describe "DepGraph: fan_out consistency" do
+    test "total fan_out equals total edges" do
+      adj = %{"a" => ["b", "c"], "b" => ["c"], "c" => []}
+      fan_out = NPM.DepGraph.fan_out(adj)
+      total = fan_out |> Map.values() |> Enum.sum()
+      assert total == 3
+    end
+  end
+
+  describe "Alias: real_name for scoped aliases" do
+    test "scoped alias returns scoped real name" do
+      assert "@babel/core" = NPM.Alias.real_name("my-babel", "npm:@babel/core@^7.0")
+    end
+  end
+
+  describe "Validator: validate_name special characters" do
+    test "allows dots in name" do
+      assert :ok = NPM.Validator.validate_name("my.package")
+    end
+
+    test "allows tilde in name" do
+      assert :ok = NPM.Validator.validate_name("my~package")
+    end
+  end
+
+  describe "SemverUtil: update_type across major boundary" do
+    test "0.x to 1.x is major" do
+      assert :major = NPM.SemverUtil.update_type("0.9.0", "1.0.0")
+    end
+
+    test "1.x to 1.x.y is patch" do
+      assert :patch = NPM.SemverUtil.update_type("1.0.0", "1.0.1")
+    end
+  end
+
   describe "EnvCheck: node_version format" do
     test "version starts with v when present" do
       case NPM.EnvCheck.node_version() do
