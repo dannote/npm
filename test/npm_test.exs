@@ -2584,6 +2584,109 @@ defmodule NPMTest do
     end
   end
 
+  # --- Config.parse_npmrc edge cases ---
+
+  describe "Config.parse_npmrc edge cases" do
+    test "handles multiple = signs in value" do
+      result = NPM.Config.parse_npmrc("key=value=with=equals")
+      assert result["key"] == "value=with=equals"
+    end
+
+    test "handles lines with only comments" do
+      result = NPM.Config.parse_npmrc("# comment\n# another")
+      assert result == %{}
+    end
+
+    test "handles mixed content" do
+      content = """
+      # npm config
+      registry=https://example.com
+      # auth stuff
+      always-auth=true
+      save-exact=true
+      """
+
+      result = NPM.Config.parse_npmrc(content)
+      assert map_size(result) == 3
+      assert result["registry"] == "https://example.com"
+      assert result["always-auth"] == "true"
+      assert result["save-exact"] == "true"
+    end
+  end
+
+  # --- Linker.link_bins replaces old links ---
+
+  describe "Linker.link_bins replaces old links" do
+    @tag :tmp_dir
+    test "overwrites existing bin links", %{tmp_dir: dir} do
+      nm_dir = Path.join(dir, "node_modules")
+      bin_dir = Path.join(nm_dir, ".bin")
+      File.mkdir_p!(bin_dir)
+
+      File.write!(Path.join(bin_dir, "old-link"), "stale")
+
+      pkg_dir = Path.join(nm_dir, "tool")
+      File.mkdir_p!(pkg_dir)
+      File.write!(Path.join(pkg_dir, "package.json"), ~s({"name":"tool","bin":"./new.js"}))
+      File.write!(Path.join(pkg_dir, "new.js"), "#!/usr/bin/env node")
+
+      NPM.Linker.link_bins(nm_dir, [{"tool", "1.0.0"}])
+
+      assert File.exists?(Path.join(bin_dir, "tool"))
+    end
+  end
+
+  # --- File dep resolution ---
+
+  describe "PackageJSON.file_dep edge cases" do
+    test "file:. is a file dep" do
+      assert NPM.PackageJSON.file_dep?("file:.")
+    end
+
+    test "file: with absolute path" do
+      assert NPM.PackageJSON.file_dep?("file:/absolute/path")
+    end
+  end
+
+  # --- Validator name edge cases ---
+
+  describe "Validator name limits" do
+    test "accepts 1-char name" do
+      assert :ok = NPM.Validator.validate_name("x")
+    end
+
+    test "accepts name with numbers" do
+      assert :ok = NPM.Validator.validate_name("react18")
+    end
+
+    test "allows special chars like dot" do
+      assert :ok = NPM.Validator.validate_name("my.pkg")
+    end
+
+    test "allows hyphens" do
+      assert :ok = NPM.Validator.validate_name("my-long-package-name")
+    end
+  end
+
+  # --- Cache ensure with cached package ---
+
+  describe "Cache.ensure skip download" do
+    @tag :tmp_dir
+    test "returns immediately for cached package", %{tmp_dir: dir} do
+      cache_dir = Path.join(dir, "cache")
+      System.put_env("NPM_EX_CACHE_DIR", cache_dir)
+
+      setup_cached_package(cache_dir, "cached-pkg", "1.0.0", %{
+        "package.json" => ~s({"name":"cached-pkg"})
+      })
+
+      {:ok, path} = NPM.Cache.ensure("cached-pkg", "1.0.0", "http://unused.example.com", "")
+      assert String.ends_with?(path, "cached-pkg/1.0.0")
+
+      System.delete_env("NPM_EX_CACHE_DIR")
+    end
+  end
+
   # --- Helpers ---
 
   defp create_test_tgz(files) do
