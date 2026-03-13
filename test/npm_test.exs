@@ -4741,6 +4741,60 @@ defmodule NPMTest do
     end
   end
 
+  describe "SemverUtil: max_satisfying" do
+    test "finds highest matching version" do
+      versions = ["1.0.0", "1.1.0", "1.2.0", "2.0.0"]
+      assert {:ok, "1.2.0"} = NPM.SemverUtil.max_satisfying(versions, "^1.0.0")
+    end
+
+    test "returns :none when nothing matches" do
+      versions = ["1.0.0", "1.1.0"]
+      assert :none = NPM.SemverUtil.max_satisfying(versions, "^2.0.0")
+    end
+  end
+
+  describe "SemverUtil: min_satisfying" do
+    test "finds lowest matching version" do
+      versions = ["1.0.0", "1.1.0", "1.2.0"]
+      assert {:ok, "1.0.0"} = NPM.SemverUtil.min_satisfying(versions, "^1.0.0")
+    end
+  end
+
+  describe "SemverUtil: filter" do
+    test "returns only matching versions" do
+      versions = ["0.9.0", "1.0.0", "1.1.0", "2.0.0"]
+      result = NPM.SemverUtil.filter(versions, "^1.0.0")
+      assert "1.0.0" in result
+      assert "1.1.0" in result
+      refute "0.9.0" in result
+      refute "2.0.0" in result
+    end
+  end
+
+  describe "SemverUtil: any_satisfying?" do
+    test "returns true when match exists" do
+      assert NPM.SemverUtil.any_satisfying?(["1.0.0", "2.0.0"], "^1.0.0")
+    end
+
+    test "returns false when no match" do
+      refute NPM.SemverUtil.any_satisfying?(["1.0.0"], "^2.0.0")
+    end
+  end
+
+  describe "SemverUtil: update_type" do
+    test "detects major update" do
+      assert :major = NPM.SemverUtil.update_type("1.0.0", "2.0.0")
+    end
+
+    test "detects minor update" do
+      assert :minor = NPM.SemverUtil.update_type("1.0.0", "1.1.0")
+    end
+
+    test "detects patch update" do
+      assert :patch = NPM.SemverUtil.update_type("1.0.0", "1.0.1")
+    end
+  end
+
   describe "DepGraph: adjacency_list construction" do
     test "handles empty lockfile" do
       adj = NPM.DepGraph.adjacency_list(%{})
