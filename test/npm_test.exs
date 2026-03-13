@@ -1529,6 +1529,117 @@ defmodule NPMTest do
     end
   end
 
+  # --- Linker with multiple strategies ---
+
+  describe "Linker copy vs symlink" do
+    @tag :tmp_dir
+    test "copy creates independent files", %{tmp_dir: dir} do
+      cache_dir = Path.join(dir, "cache")
+      nm_dir = Path.join(dir, "node_modules")
+
+      setup_cached_package(cache_dir, "cp-test", "1.0.0", %{
+        "package.json" => ~s({"name":"cp-test"}),
+        "index.js" => "original"
+      })
+
+      lockfile = %{
+        "cp-test" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      System.put_env("NPM_EX_CACHE_DIR", cache_dir)
+      NPM.Linker.link(lockfile, nm_dir, :copy)
+      System.delete_env("NPM_EX_CACHE_DIR")
+
+      target = Path.join([nm_dir, "cp-test", "index.js"])
+      {:ok, info} = File.lstat(target)
+      assert info.type == :regular
+    end
+
+    @tag :tmp_dir
+    test "symlink creates links to cache", %{tmp_dir: dir} do
+      cache_dir = Path.join(dir, "cache")
+      nm_dir = Path.join(dir, "node_modules")
+
+      setup_cached_package(cache_dir, "ln-test", "1.0.0", %{
+        "package.json" => ~s({"name":"ln-test"})
+      })
+
+      lockfile = %{
+        "ln-test" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      System.put_env("NPM_EX_CACHE_DIR", cache_dir)
+      NPM.Linker.link(lockfile, nm_dir, :symlink)
+      System.delete_env("NPM_EX_CACHE_DIR")
+
+      target = Path.join(nm_dir, "ln-test")
+      {:ok, info} = File.lstat(target)
+      assert info.type == :symlink
+    end
+  end
+
+  # --- PackageJSON preserves field order ---
+
+  describe "PackageJSON field preservation" do
+    @tag :tmp_dir
+    test "preserves name, version, private when adding deps", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      File.write!(path, ~s({
+        "name": "my-project",
+        "version": "2.0.0",
+        "private": true,
+        "license": "MIT"
+      }))
+
+      NPM.PackageJSON.add_dep("lodash", "^4.0", path)
+
+      content = File.read!(path) |> :json.decode()
+      assert content["name"] == "my-project"
+      assert content["version"] == "2.0.0"
+      assert content["private"] == true
+      assert content["license"] == "MIT"
+      assert content["dependencies"]["lodash"] == "^4.0"
+    end
+
+    @tag :tmp_dir
+    test "preserves scripts when adding dev deps", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      File.write!(path, ~s({
+        "scripts": {"build": "tsc", "test": "jest"},
+        "dependencies": {"react": "^18.0"}
+      }))
+
+      NPM.PackageJSON.add_dep("jest", "^29.0", path, dev: true)
+
+      content = File.read!(path) |> :json.decode()
+      assert content["scripts"]["build"] == "tsc"
+      assert content["scripts"]["test"] == "jest"
+      assert content["dependencies"]["react"] == "^18.0"
+      assert content["devDependencies"]["jest"] == "^29.0"
+    end
+  end
+
+  # --- Resolver module tests ---
+
+  describe "Resolver.clear_cache" do
+    test "succeeds even when no cache exists" do
+      assert :ok = NPM.Resolver.clear_cache()
+    end
+
+    test "succeeds when called twice" do
+      assert :ok = NPM.Resolver.clear_cache()
+      assert :ok = NPM.Resolver.clear_cache()
+    end
+  end
+
+  describe "Resolver.resolve edge cases" do
+    test "returns ok for empty deps" do
+      assert {:ok, %{}} = NPM.Resolver.resolve(%{})
+    end
+  end
+
   # --- Helpers ---
 
   defp create_test_tgz(files) do
