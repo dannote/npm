@@ -4253,6 +4253,81 @@ defmodule NPMTest do
     end
   end
 
+  # --- NPMSemver: additional ported edge cases ---
+
+  describe "npm semver: comparator edge cases" do
+    test "<=2.0.0 includes 2.0.0" do
+      assert NPMSemver.matches?("2.0.0", "<=2.0.0")
+    end
+
+    test ">1.0.0 excludes 1.0.0" do
+      refute NPMSemver.matches?("1.0.0", ">1.0.0")
+      assert NPMSemver.matches?("1.0.1", ">1.0.0")
+    end
+
+    test "<2.0.0 excludes 2.0.0" do
+      refute NPMSemver.matches?("2.0.0", "<2.0.0")
+      assert NPMSemver.matches?("1.9.9", "<2.0.0")
+    end
+
+    test ">=1.0.0 includes 1.0.0" do
+      assert NPMSemver.matches?("1.0.0", ">=1.0.0")
+    end
+  end
+
+  describe "npm semver: complex ranges" do
+    test ">=1.0.0 <=2.0.0" do
+      assert NPMSemver.matches?("1.0.0", ">=1.0.0 <=2.0.0")
+      assert NPMSemver.matches?("2.0.0", ">=1.0.0 <=2.0.0")
+      refute NPMSemver.matches?("2.0.1", ">=1.0.0 <=2.0.0")
+    end
+
+    test "triple || union" do
+      assert NPMSemver.matches?("1.0.0", "^1.0.0 || ^2.0.0 || ^3.0.0")
+      assert NPMSemver.matches?("2.5.0", "^1.0.0 || ^2.0.0 || ^3.0.0")
+      assert NPMSemver.matches?("3.1.0", "^1.0.0 || ^2.0.0 || ^3.0.0")
+      refute NPMSemver.matches?("4.0.0", "^1.0.0 || ^2.0.0 || ^3.0.0")
+    end
+
+    test ">1.0.0 <1.2.0" do
+      assert NPMSemver.matches?("1.0.1", ">1.0.0 <1.2.0")
+      assert NPMSemver.matches?("1.1.0", ">1.0.0 <1.2.0")
+      refute NPMSemver.matches?("1.2.0", ">1.0.0 <1.2.0")
+    end
+  end
+
+  describe "npm semver: caret zero-version semantics" do
+    test "^0.0.0 matches only 0.0.0" do
+      assert NPMSemver.matches?("0.0.0", "^0.0.0")
+      refute NPMSemver.matches?("0.0.1", "^0.0.0")
+    end
+
+    test "^0.1.0 allows patch bumps" do
+      assert NPMSemver.matches?("0.1.0", "^0.1.0")
+      assert NPMSemver.matches?("0.1.5", "^0.1.0")
+      refute NPMSemver.matches?("0.2.0", "^0.1.0")
+    end
+
+    test "^0.0.1 pins exact" do
+      assert NPMSemver.matches?("0.0.1", "^0.0.1")
+      refute NPMSemver.matches?("0.0.2", "^0.0.1")
+    end
+  end
+
+  describe "npm semver: tilde edge cases" do
+    test "~0.0.1 allows patch bumps" do
+      assert NPMSemver.matches?("0.0.1", "~0.0.1")
+      assert NPMSemver.matches?("0.0.5", "~0.0.1")
+      refute NPMSemver.matches?("0.1.0", "~0.0.1")
+    end
+
+    test "~1 matches any 1.x" do
+      assert NPMSemver.matches?("1.0.0", "~1")
+      assert NPMSemver.matches?("1.5.0", "~1")
+      refute NPMSemver.matches?("2.0.0", "~1")
+    end
+  end
+
   # --- NPMSemver ported edge cases from node-semver ---
 
   describe "npm semver: ported from node-semver test fixtures" do
