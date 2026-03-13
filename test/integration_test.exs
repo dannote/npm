@@ -739,6 +739,28 @@ defmodule NPM.IntegrationTest do
     end
   end
 
+  describe "npm compatibility: nested version resolution" do
+    test "ms version conflict tracked in original_deps" do
+      NPM.Resolver.clear_cache()
+      deps = %{"express" => "^4.21.0"}
+      {:ok, resolved} = NPM.Resolver.resolve(deps)
+
+      nested = Map.get(resolved, :nested, %{})
+      assert Map.has_key?(nested, "ms"), "ms should be tracked as nested"
+
+      original_deps = NPM.Resolver.get_original_deps("ms")
+      assert map_size(original_deps) > 0, "should have parent packages that need ms"
+
+      # debug@2.6.9 needs ms@2.0.0, and other packages need different versions
+      debug_key =
+        original_deps
+        |> Map.keys()
+        |> Enum.find(&String.starts_with?(&1, "debug@"))
+
+      assert debug_key != nil, "debug should depend on ms"
+    end
+  end
+
   describe "npm compatibility: Exports field on real packages" do
     test "chalk 5.x has type: module" do
       raw = get_raw_packument("chalk")
