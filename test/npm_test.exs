@@ -4255,6 +4255,92 @@ defmodule NPMTest do
 
   # --- NPMSemver: additional ported edge cases ---
 
+  describe "Config: real .npmrc patterns" do
+    test "parses registry config" do
+      content = "registry=https://registry.npmjs.org/"
+      result = NPM.Config.parse_npmrc(content)
+      assert result["registry"] == "https://registry.npmjs.org/"
+    end
+
+    test "parses scoped registry" do
+      content = "@mycompany:registry=https://npm.mycompany.com"
+      result = NPM.Config.parse_npmrc(content)
+      assert result["@mycompany:registry"] == "https://npm.mycompany.com"
+    end
+
+    test "parses auth token" do
+      content = "//registry.npmjs.org/:_authToken=npm_abc123"
+      result = NPM.Config.parse_npmrc(content)
+      assert result["//registry.npmjs.org/:_authToken"] == "npm_abc123"
+    end
+
+    test "ignores comments and blank lines" do
+      content = """
+      # This is a comment
+      registry=https://registry.npmjs.org/
+
+      # Another comment
+      always-auth=false
+      """
+
+      result = NPM.Config.parse_npmrc(content)
+      assert map_size(result) == 2
+      assert result["registry"] == "https://registry.npmjs.org/"
+    end
+
+    test "handles real-world .npmrc with multiple settings" do
+      content = """
+      registry=https://registry.npmjs.org/
+      @myco:registry=https://npm.myco.com/
+      //npm.myco.com/:_authToken=secret123
+      save-exact=true
+      engine-strict=true
+      """
+
+      result = NPM.Config.parse_npmrc(content)
+      assert map_size(result) == 5
+      assert result["save-exact"] == "true"
+    end
+  end
+
+  describe "PackageJSON: workspaces patterns" do
+    @tag :tmp_dir
+    test "reads array workspaces", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+      File.write!(path, ~s({"workspaces": ["packages/*", "apps/*"]}))
+
+      assert {:ok, patterns} = NPM.PackageJSON.read_workspaces(path)
+      assert "packages/*" in patterns
+      assert "apps/*" in patterns
+    end
+
+    @tag :tmp_dir
+    test "reads object workspaces (yarn format)", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+      File.write!(path, ~s({"workspaces": {"packages": ["packages/*"]}}))
+
+      assert {:ok, patterns} = NPM.PackageJSON.read_workspaces(path)
+      assert "packages/*" in patterns
+    end
+
+    @tag :tmp_dir
+    test "expand_workspaces finds real workspace dirs", %{tmp_dir: dir} do
+      # Create workspace structure
+      ws1 = Path.join(dir, "packages/pkg-a")
+      ws2 = Path.join(dir, "packages/pkg-b")
+      File.mkdir_p!(ws1)
+      File.mkdir_p!(ws2)
+      File.write!(Path.join(ws1, "package.json"), ~s({"name": "@ws/a"}))
+      File.write!(Path.join(ws2, "package.json"), ~s({"name": "@ws/b"}))
+
+      # Non-workspace dir (no package.json)
+      File.mkdir_p!(Path.join(dir, "packages/not-a-pkg"))
+
+      result = NPM.PackageJSON.expand_workspaces(["packages/*"], dir)
+      assert length(result) == 2
+    end
+  end
+
   describe "Platform: real OS/CPU detection" do
     test "current_os returns a valid OS for this machine" do
       os = NPM.Platform.current_os()
