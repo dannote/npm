@@ -228,11 +228,18 @@ defmodule NPM do
         lockfile = build_lockfile(flat)
         print_lockfile_diff(old_lockfile, lockfile)
         NPM.Lockfile.write(lockfile)
-        link_from_lockfile(lockfile)
+        link_and_nest(lockfile, nested_info, flat)
 
       {:error, message} ->
         Mix.shell().error("Resolution failed:\n#{message}")
         {:error, :resolution_failed}
+    end
+  end
+
+  defp link_and_nest(lockfile, nested_info, flat) do
+    with :ok <- link_from_lockfile(lockfile) do
+      if nested_info != %{}, do: NPM.Linker.link_nested(nested_info, flat, @node_modules)
+      :ok
     end
   end
 

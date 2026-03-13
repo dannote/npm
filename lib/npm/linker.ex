@@ -12,6 +12,7 @@ defmodule NPM.Linker do
 
   @type strategy :: :symlink | :copy
   @type resolved :: %{String.t() => NPM.Lockfile.entry()}
+  @type nested_info :: %{String.t() => term()}
 
   @doc """
   Link all resolved packages into `node_modules`.
@@ -23,6 +24,25 @@ defmodule NPM.Linker do
     with :ok <- populate_cache(lockfile) do
       create_node_modules(lockfile, node_modules_dir, strategy)
     end
+  end
+
+  @doc """
+  Link nested packages into parent package `node_modules/` subdirectories.
+
+  For each nested package, resolves which version each parent needs and
+  creates `parent_pkg/node_modules/nested_pkg/` with the correct version.
+  """
+  @spec link_nested(nested_info(), resolved(), String.t(), strategy()) :: :ok
+  def link_nested(
+        nested_info,
+        flat_lockfile,
+        nm_dir \\ "node_modules",
+        strategy \\ default_strategy()
+      ) do
+    Enum.each(nested_info, fn {nested_pkg, _} ->
+      original_deps = NPM.Resolver.get_original_deps(nested_pkg)
+      install_nested_for_parents(nested_pkg, original_deps, flat_lockfile, nm_dir, strategy)
+    end)
   end
 
   defp populate_cache(lockfile) do
@@ -198,6 +218,62 @@ defmodule NPM.Linker do
   end
 
   defp bin_command_name(_data, pkg_dir), do: Path.basename(pkg_dir)
+
+  defp install_nested_for_parents(nested_pkg, original_deps, flat_lockfile, nm_dir, strategy) do
+    flat_lockfile
+    |> Enum.each(fn {parent_name, parent_entry} ->
+      key = "#{parent_name}@#{parent_entry.version}"
+      range = Map.get(original_deps, key)
+
+      if range do
+        version = resolve_nested_version(nested_pkg, range)
+        install_single_nested(nested_pkg, version, parent_name, nm_dir, strategy)
+      end
+    end)
+  end
+
+  defp resolve_nested_version(name, range) do
+    case NPM.Registry.get_packument(name) do
+      {:ok, packument} ->
+        packument.versions
+        |> Map.keys()
+        |> Enum.filter(&version_matches?(&1, range))
+        |> Enum.sort(&version_gt?/2)
+        |> List.first()
+
+      _ ->
+        nil
+    end
+  end
+
+  defp version_matches?(version, range) do
+    NPMSemver.matches?(version, range)
+  rescue
+    _ -> false
+  end
+
+  defp version_gt?(a, b) do
+    case Version.compare(Version.parse!(a), Version.parse!(b)) do
+      :gt -> true
+      _ -> false
+    end
+  end
+
+  defp install_single_nested(_pkg, nil, _parent, _nm_dir, _strategy), do: :ok
+
+  defp install_single_nested(pkg, version, parent, nm_dir, strategy) do
+    with {:ok, packument} <- NPM.Registry.get_packument(pkg),
+         %{} = info <- Map.get(packument.versions, version) do
+      tarball = info.tarball
+      integrity = info.integrity
+      NPM.Cache.ensure(pkg, version, tarball, integrity)
+      cache_path = NPM.Cache.package_dir(pkg, version)
+      target = Path.join([nm_dir, parent, "node_modules", pkg])
+      link_package(cache_path, target, strategy)
+    end
+
+    :ok
+  end
 
   defp list_dir(path) do
     case File.ls(path) do

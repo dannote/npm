@@ -5153,6 +5153,101 @@ defmodule NPMTest do
     end
   end
 
+  describe "Linker: nested package installation" do
+    @tag :tmp_dir
+    test "link_nested creates parent/node_modules/nested_pkg structure", %{tmp_dir: dir} do
+      nm_dir = Path.join(dir, "node_modules")
+      cache_dir = Path.join(dir, "cache")
+
+      # Set up parent and nested package in cache
+      setup_cached_package(cache_dir, "parent-pkg", "1.0.0", %{
+        "package.json" => ~s({"name":"parent-pkg","version":"1.0.0"})
+      })
+
+      setup_cached_package(cache_dir, "nested-pkg", "2.0.0", %{
+        "package.json" => ~s({"name":"nested-pkg","version":"2.0.0","main":"index.js"}),
+        "index.js" => "module.exports = 'v2'"
+      })
+
+      System.put_env("NPM_EX_CACHE_DIR", cache_dir)
+
+      # First, create flat node_modules with parent
+      flat_lockfile = %{
+        "parent-pkg" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      :ok = NPM.Linker.link(flat_lockfile, nm_dir, :copy)
+      assert File.exists?(Path.join([nm_dir, "parent-pkg", "package.json"]))
+
+      # Now create nested
+      nested_target = Path.join([nm_dir, "parent-pkg", "node_modules", "nested-pkg"])
+      source = NPM.Cache.package_dir("nested-pkg", "2.0.0")
+      File.mkdir_p!(Path.dirname(nested_target))
+      File.cp_r!(source, nested_target)
+
+      assert File.exists?(Path.join(nested_target, "index.js"))
+      content = File.read!(Path.join(nested_target, "index.js"))
+      assert content == "module.exports = 'v2'"
+
+      System.delete_env("NPM_EX_CACHE_DIR")
+    end
+
+    @tag :tmp_dir
+    test "nested node_modules separate from hoisted", %{tmp_dir: dir} do
+      nm_dir = Path.join(dir, "node_modules")
+      cache_dir = Path.join(dir, "cache")
+
+      setup_cached_package(cache_dir, "debug", "2.6.9", %{
+        "package.json" => ~s({"name":"debug","version":"2.6.9"})
+      })
+
+      setup_cached_package(cache_dir, "ms", "2.0.0", %{
+        "package.json" => ~s({"name":"ms","version":"2.0.0"}),
+        "index.js" => "module.exports = 'v2.0.0'"
+      })
+
+      setup_cached_package(cache_dir, "ms", "2.1.3", %{
+        "package.json" => ~s({"name":"ms","version":"2.1.3"}),
+        "index.js" => "module.exports = 'v2.1.3'"
+      })
+
+      System.put_env("NPM_EX_CACHE_DIR", cache_dir)
+
+      # Hoisted ms@2.1.3 (most common)
+      flat_lockfile = %{
+        "debug" => %{version: "2.6.9", integrity: "", tarball: "", dependencies: %{}},
+        "ms" => %{version: "2.1.3", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      :ok = NPM.Linker.link(flat_lockfile, nm_dir, :copy)
+
+      # Hoisted ms is 2.1.3
+      hoisted_pkg = Path.join([nm_dir, "ms", "package.json"])
+      assert File.exists?(hoisted_pkg)
+      hoisted_data = hoisted_pkg |> File.read!() |> :json.decode()
+      assert hoisted_data["version"] == "2.1.3"
+
+      # Manually create nested ms@2.0.0 under debug
+      nested_ms = Path.join([nm_dir, "debug", "node_modules", "ms"])
+      source = NPM.Cache.package_dir("ms", "2.0.0")
+      File.mkdir_p!(Path.dirname(nested_ms))
+      File.cp_r!(source, nested_ms)
+
+      nested_data = Path.join(nested_ms, "package.json") |> File.read!() |> :json.decode()
+      assert nested_data["version"] == "2.0.0"
+
+      # Both exist independently
+      assert File.exists?(Path.join([nm_dir, "ms", "index.js"]))
+      assert File.exists?(Path.join(nested_ms, "index.js"))
+
+      hoisted_content = File.read!(Path.join([nm_dir, "ms", "index.js"]))
+      nested_content = File.read!(Path.join(nested_ms, "index.js"))
+      assert hoisted_content != nested_content
+
+      System.delete_env("NPM_EX_CACHE_DIR")
+    end
+  end
+
   describe "Cache: ensure downloads and caches" do
     @tag :tmp_dir
     test "cached? returns true after setup", %{tmp_dir: dir} do
