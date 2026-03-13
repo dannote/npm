@@ -4,10 +4,12 @@
 - **express@4.x fails to resolve** because `debug@2.6.9` needs `ms@2.0.0` and `send@0.19.0` needs `ms@2.1.3`
 - npm handles this via nested `node_modules` (multiple versions of same package)
 - PubGrub solver assumes one version per package (flat)
-- **Fix options**:
-  1. Pre-process deps: when a package has exact version pins (like `ms@2.0.0`), exclude it from the flat solve and handle it separately via nested node_modules
-  2. Implement a two-pass resolver: first solve ignoring exact pins, then nest conflicting exact versions
-  3. Use npm's own algorithm instead of PubGrub
+- **Root cause**: exact version pin conflicts (ms@2.0.0 vs ms@2.1.3) in transitive deps
+- **Fix approach**: Two-phase resolution
+  1. Run PubGrub first. If it succeeds, done (flat layout works).
+  2. On conflict, identify the conflicting package (e.g. `ms`). Pick latest version for top-level, remove the conflicting exact pins from the solver and re-solve. Track nested versions separately.
+  3. Linker creates `debug/node_modules/ms/` for the older pinned version.
+- This is the single most impactful fix for real-world npm compatibility.
 
 ## Real npm Compatibility Gaps Found by Integration Tests
 - `*`, `""`, `latest` ranges now fixed (normalize to `>=0.0.0`)

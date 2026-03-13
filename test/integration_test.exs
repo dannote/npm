@@ -565,6 +565,124 @@ defmodule NPM.IntegrationTest do
     end
   end
 
+  describe "npm compatibility: real multi-dep resolution" do
+    setup do
+      NPM.Resolver.clear_cache()
+      :ok
+    end
+
+    test "resolves depd + mime-types without conflicts" do
+      {:ok, resolved} =
+        NPM.Resolver.resolve(%{
+          "depd" => "^2.0.0",
+          "mime-types" => "^2.1.34"
+        })
+
+      assert Map.has_key?(resolved, "depd")
+      assert Map.has_key?(resolved, "mime-types")
+      assert Map.has_key?(resolved, "mime-db")
+    end
+
+    test "resolves cookie + cookie-signature (no shared deps)" do
+      {:ok, resolved} =
+        NPM.Resolver.resolve(%{
+          "cookie" => "^0.7.0",
+          "cookie-signature" => "^1.0.6"
+        })
+
+      assert map_size(resolved) == 2
+    end
+
+    test "resolves content-type + content-disposition" do
+      {:ok, resolved} =
+        NPM.Resolver.resolve(%{
+          "content-type" => "~1.0.4",
+          "content-disposition" => "^0.5.4"
+        })
+
+      assert Map.has_key?(resolved, "content-type")
+      assert Map.has_key?(resolved, "content-disposition")
+    end
+  end
+
+  describe "npm compatibility: tarball content verification" do
+    @tag :tmp_dir
+    test "is-number 7.0.0 has correct files", %{tmp_dir: dir} do
+      cache_dir = Path.join(dir, "cache")
+      System.put_env("NPM_EX_CACHE_DIR", cache_dir)
+
+      {:ok, packument} = NPM.Registry.get_packument("is-number")
+      info = packument.versions["7.0.0"]
+
+      {:ok, path} = NPM.Cache.ensure("is-number", "7.0.0", info.dist.tarball, info.dist.integrity)
+
+      # Real is-number 7.0.0 should have index.js
+      assert File.exists?(Path.join(path, "index.js"))
+      # Should have package.json with correct name/version
+      pkg = path |> Path.join("package.json") |> File.read!() |> :json.decode()
+      assert pkg["name"] == "is-number"
+      assert pkg["version"] == "7.0.0"
+      # Should have license field
+      assert is_binary(pkg["license"])
+
+      System.delete_env("NPM_EX_CACHE_DIR")
+    end
+
+    @tag :tmp_dir
+    test "depd 2.0.0 tarball extracts all expected files", %{tmp_dir: dir} do
+      cache_dir = Path.join(dir, "cache")
+      System.put_env("NPM_EX_CACHE_DIR", cache_dir)
+
+      {:ok, packument} = NPM.Registry.get_packument("depd")
+      info = packument.versions["2.0.0"]
+
+      {:ok, path} = NPM.Cache.ensure("depd", "2.0.0", info.dist.tarball, info.dist.integrity)
+
+      pkg = path |> Path.join("package.json") |> File.read!() |> :json.decode()
+      assert pkg["name"] == "depd"
+      assert pkg["version"] == "2.0.0"
+      # depd should have lib/ or index.js
+      has_entry =
+        File.exists?(Path.join(path, "index.js")) or
+          File.dir?(Path.join(path, "lib"))
+
+      assert has_entry
+
+      System.delete_env("NPM_EX_CACHE_DIR")
+    end
+  end
+
+  describe "npm compatibility: lockfile write + install round-trip" do
+    @tag :tmp_dir
+    test "resolved lockfile can be read back and reinstalled", %{tmp_dir: dir} do
+      cache_dir = Path.join(dir, "cache")
+      lock_path = Path.join(dir, "npm.lock")
+      nm1 = Path.join(dir, "nm1")
+      nm2 = Path.join(dir, "nm2")
+      System.put_env("NPM_EX_CACHE_DIR", cache_dir)
+
+      NPM.Resolver.clear_cache()
+      {:ok, resolved} = NPM.Resolver.resolve(%{"depd" => "^2.0.0"})
+      lockfile = build_lockfile(resolved)
+
+      # Write and read back
+      NPM.Lockfile.write(lockfile, lock_path)
+      {:ok, restored} = NPM.Lockfile.read(lock_path)
+
+      # Both original and restored produce identical node_modules
+      assert :ok = NPM.Linker.link(lockfile, nm1)
+      assert :ok = NPM.Linker.link(restored, nm2)
+
+      for {name, _} <- resolved do
+        pkg1 = Path.join([nm1, name, "package.json"]) |> File.read!()
+        pkg2 = Path.join([nm2, name, "package.json"]) |> File.read!()
+        assert pkg1 == pkg2, "#{name} package.json differs between installs"
+      end
+
+      System.delete_env("NPM_EX_CACHE_DIR")
+    end
+  end
+
   describe "npm compatibility: full install round-trip" do
     @tag :tmp_dir
     test "accepts install produces working node_modules", %{tmp_dir: dir} do
