@@ -1,31 +1,29 @@
 # Autoresearch Ideas
 
 ## Implemented
-- ~~Nested linker, PeerDeps, Dedupe, Workspace, Outdated, Audit, Why, Diff, Fund, License~~
-- ~~Prune, Pack, Shrinkwrap, DepCheck, Deprecation, Tree, Search, Stats, Overrides, Verify~~
-- ~~Scripts, Token, Publish, Size, BinResolver tests, Compiler tests~~
-- ~~Split monolith test file, ex_dna quality gate, fixed code clones~~
-- ~~Init, Link, CI, Doctor, Completion, Resolutions, Import, EngineCheck~~
-- ~~BundleDeps, OptionalDeps, DevDeps, Exports extensions, Exec, Rebuild~~
-- ~~Config extensions, PeerDepsCheck, Normalize, TypesResolution, Changelog~~
-- ~~Duplicate, Ignore, GitInfo~~
-- ~~Refactored Workspace.topo_sort and DepGraph.cycles to use :digraph_utils~~
+- ~~60+ modules, 80+ test files, 1800 tests~~
+- ~~All medium priority modules done (Provenance, SBOM, Cve, FileSize, VersionRange, etc.)~~
+- ~~:digraph_utils refactor, ex_dna gate, edge case sweeps~~
 
-## Medium Priority: New Modules
-- `NPM.Provenance` — SLSA provenance / supply chain attestation checking
-- `NPM.SBOM` — Software Bill of Materials generation (CycloneDX/SPDX)
-- `NPM.Cve` — CVE database cross-referencing
-- `NPM.FileSize` — individual file size analysis within packages
-- `NPM.VersionRange` — advanced version range manipulation (intersect, union, complement)
+## New Modules
+- `NPM.Validate` — comprehensive package.json schema validation (required fields, types, known field checks)
+- `NPM.Scope` — scope management (parse @scope/name, extract scope, validate scope names)
+- `NPM.Dist` — dist metadata (tarball URLs, shasum, file count, unpacked size)
+- `NPM.Os` — os/cpu field checking (platform compatibility matrix)
+- `NPM.Hooks` edge cases — pre/post lifecycle hooks ordering and filtering
+- `NPM.Monorepo` — detect monorepo type (npm workspaces, lerna, turborepo, nx)
 
-## Medium Priority: More Tests
-- Error handling paths in Registry, Tarball, Cache
-- Edge cases in Resolver, Linker, LockMerge
-- More tests for existing mix tasks
-- Lockfile round-trip (write then read) edge cases
-- PackageSpec complex range parsing edge cases
+## More Tests for Existing Modules
+- Registry error handling paths (network failures, invalid JSON, 404)
+- Tarball error paths (corrupt archive, integrity mismatch)
+- Cache error paths (disk full, permission denied)
+- Resolver edge cases (circular deps, conflicting ranges)
+- LockMerge edge cases (conflicting merges, missing entries)
+- PackageSpec complex ranges (pre-release, build metadata, tags)
+- Mix task tests (argument parsing, output format)
 
-## Lower Priority: Enhance Existing
-- Workspace module: workspace:* protocol range support
-- CI module: clean_and_install! action
-- Link module: global link registry
+## Enhance Existing
+- Workspace: workspace:* protocol range support
+- CI: clean_and_install! action
+- Link: global link registry
+- Exec: auto-install missing binaries
