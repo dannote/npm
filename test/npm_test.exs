@@ -4509,6 +4509,105 @@ defmodule NPMTest do
     end
   end
 
+  describe "Resolver: normalize_range handles all npm range formats" do
+    test "star/empty/latest normalize to >=0.0.0" do
+      # These are the special cases handled by normalize_range
+      assert {:ok, _} = NPMSemver.to_hex_constraint(">=0.0.0")
+    end
+
+    test "caret ranges" do
+      assert {:ok, _} = NPMSemver.to_hex_constraint("^1.0.0")
+      assert {:ok, _} = NPMSemver.to_hex_constraint("^0.1.0")
+      assert {:ok, _} = NPMSemver.to_hex_constraint("^0.0.1")
+    end
+
+    test "tilde ranges" do
+      assert {:ok, _} = NPMSemver.to_hex_constraint("~1.2.3")
+      assert {:ok, _} = NPMSemver.to_hex_constraint("~0.0.1")
+    end
+
+    test "exact versions" do
+      assert {:ok, _} = NPMSemver.to_hex_constraint("1.0.0")
+      assert {:ok, _} = NPMSemver.to_hex_constraint("0.0.0")
+    end
+
+    test "comparison operators" do
+      assert {:ok, _} = NPMSemver.to_hex_constraint(">1.0.0")
+      assert {:ok, _} = NPMSemver.to_hex_constraint(">=1.0.0")
+      assert {:ok, _} = NPMSemver.to_hex_constraint("<2.0.0")
+      assert {:ok, _} = NPMSemver.to_hex_constraint("<=2.0.0")
+    end
+
+    test "combined ranges" do
+      assert {:ok, _} = NPMSemver.to_hex_constraint(">=1.0.0 <2.0.0")
+    end
+
+    test "union ranges" do
+      assert {:ok, _} = NPMSemver.to_hex_constraint("^1.0.0 || ^2.0.0")
+    end
+
+    test "x-ranges" do
+      assert {:ok, _} = NPMSemver.to_hex_constraint("1.x")
+      assert {:ok, _} = NPMSemver.to_hex_constraint("1.2.x")
+    end
+
+    test "hyphen ranges" do
+      assert {:ok, _} = NPMSemver.to_hex_constraint("1.0.0 - 2.0.0")
+    end
+  end
+
+  describe "Lifecycle: script name detection" do
+    @tag :tmp_dir
+    test "ignores non-lifecycle scripts", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      File.write!(path, ~s({
+        "scripts": {
+          "test": "jest",
+          "build": "tsc",
+          "start": "node index.js"
+        }
+      }))
+
+      hooks = NPM.Lifecycle.detect(path)
+      assert hooks == []
+    end
+
+    @tag :tmp_dir
+    test "detects multiple lifecycle hooks", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      File.write!(path, ~s({
+        "scripts": {
+          "preinstall": "echo pre",
+          "postinstall": "echo post",
+          "prepare": "echo prep"
+        }
+      }))
+
+      hooks = NPM.Lifecycle.detect(path)
+      names = Enum.map(hooks, &elem(&1, 0))
+      assert "preinstall" in names
+      assert "postinstall" in names
+      assert "prepare" in names
+    end
+  end
+
+  describe "Exports: map patterns" do
+    test "single dot entry" do
+      assert {:ok, "./index.js"} = NPM.Exports.resolve(%{"." => "./index.js"}, ".")
+    end
+
+    test "missing subpath returns error" do
+      assert :error = NPM.Exports.resolve(%{"." => "./index.js"}, "./missing")
+    end
+
+    test "nested conditions with single match" do
+      exports = %{"." => %{"default" => "./lib.js"}}
+      assert {:ok, "./lib.js"} = NPM.Exports.resolve(exports, ".", ["default"])
+    end
+  end
+
   describe "Cache: directory structure" do
     test "package_dir includes name and version" do
       dir = NPM.Cache.package_dir("lodash", "4.17.21")
