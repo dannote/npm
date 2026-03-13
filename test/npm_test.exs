@@ -2687,6 +2687,86 @@ defmodule NPMTest do
     end
   end
 
+  # --- Lockfile extended ---
+
+  describe "Lockfile.version" do
+    @tag :tmp_dir
+    test "reads lockfile version", %{tmp_dir: dir} do
+      path = Path.join(dir, "npm.lock")
+
+      File.write!(
+        path,
+        NPM.JSON.encode_pretty(%{"lockfileVersion" => 1, "packages" => %{}})
+      )
+
+      assert 1 = NPM.Lockfile.version(path)
+    end
+
+    @tag :tmp_dir
+    test "returns nil for missing file", %{tmp_dir: dir} do
+      assert nil == NPM.Lockfile.version(Path.join(dir, "nope.lock"))
+    end
+  end
+
+  describe "Lockfile.package_names" do
+    @tag :tmp_dir
+    test "lists sorted names", %{tmp_dir: dir} do
+      path = Path.join(dir, "npm.lock")
+
+      lockfile = %{
+        "zebra" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}},
+        "alpha" => %{version: "2.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      NPM.Lockfile.write(lockfile, path)
+      assert {:ok, ["alpha", "zebra"]} = NPM.Lockfile.package_names(path)
+    end
+  end
+
+  describe "Lockfile.has_package?" do
+    @tag :tmp_dir
+    test "detects existing package", %{tmp_dir: dir} do
+      path = Path.join(dir, "npm.lock")
+
+      lockfile = %{
+        "lodash" => %{version: "4.17.21", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      NPM.Lockfile.write(lockfile, path)
+      assert NPM.Lockfile.has_package?("lodash", path)
+      refute NPM.Lockfile.has_package?("missing", path)
+    end
+  end
+
+  describe "Lockfile.get_package" do
+    @tag :tmp_dir
+    test "retrieves single entry", %{tmp_dir: dir} do
+      path = Path.join(dir, "npm.lock")
+
+      lockfile = %{
+        "react" => %{
+          version: "18.2.0",
+          integrity: "sha512-abc",
+          tarball: "url",
+          dependencies: %{}
+        }
+      }
+
+      NPM.Lockfile.write(lockfile, path)
+      assert {:ok, entry} = NPM.Lockfile.get_package("react", path)
+      assert entry.version == "18.2.0"
+    end
+
+    @tag :tmp_dir
+    test "returns error for missing package", %{tmp_dir: dir} do
+      path = Path.join(dir, "npm.lock")
+      lockfile = %{"react" => %{version: "18.2.0", integrity: "", tarball: "", dependencies: %{}}}
+
+      NPM.Lockfile.write(lockfile, path)
+      assert :error = NPM.Lockfile.get_package("vue", path)
+    end
+  end
+
   # --- Integrity ---
 
   describe "Integrity.verify" do

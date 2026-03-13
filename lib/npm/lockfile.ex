@@ -53,6 +53,48 @@ defmodule NPM.Lockfile do
     end
   end
 
+  @doc "Get the lockfile version from a file."
+  @spec version(String.t()) :: integer() | nil
+  def version(path \\ @default_path) do
+    case File.read(path) do
+      {:ok, content} ->
+        data = :json.decode(content)
+        Map.get(data, "lockfileVersion")
+
+      {:error, _} ->
+        nil
+    end
+  end
+
+  @doc "List all package names in the lockfile."
+  @spec package_names(String.t()) :: {:ok, [String.t()]} | {:error, term()}
+  def package_names(path \\ @default_path) do
+    case read(path) do
+      {:ok, lockfile} -> {:ok, Map.keys(lockfile) |> Enum.sort()}
+      error -> error
+    end
+  end
+
+  @doc """
+  Check if a specific package is in the lockfile.
+  """
+  @spec has_package?(String.t(), String.t()) :: boolean()
+  def has_package?(name, path \\ @default_path) do
+    case read(path) do
+      {:ok, lockfile} -> Map.has_key?(lockfile, name)
+      _ -> false
+    end
+  end
+
+  @doc "Get a single package entry from the lockfile."
+  @spec get_package(String.t(), String.t()) :: {:ok, entry()} | :error
+  def get_package(name, path \\ @default_path) do
+    case read(path) do
+      {:ok, lockfile} -> Map.fetch(lockfile, name)
+      _ -> :error
+    end
+  end
+
   defp serialize(lockfile) do
     for {name, entry} <- Enum.sort_by(lockfile, &elem(&1, 0)), into: %{} do
       {name,
