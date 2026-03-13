@@ -113,3 +113,4 @@
 {"run":112,"commit":"53c8367","metric":844,"metrics":{},"status":"keep","description":"Add Cache dir default, Linker hoist determinism, RegistryMirror, VersionUtil empty sort, Integrity sha256 consistency, Format pluralize, Manifest module_type — 10 tests","timestamp":1773404460387,"segment":0}
 {"run":113,"commit":"98a1ec9","metric":848,"metrics":{},"status":"keep","description":"Add git spec patterns, SemverUtil tilde filter, DepTree flatten uniqueness — 4 tests","timestamp":1773404493070,"segment":0}
 {"run":114,"commit":"1832930","metric":850,"metrics":{},"status":"keep","description":"Add NodeModules nested disk_size, Lockfile write verification — 850 tests milestone","timestamp":1773404544521,"segment":0}
+{"run":115,"commit":"f9f4404","metric":858,"metrics":{},"status":"keep","description":"Add complete caret/tilde/x-range semver behavior suites — 8 comprehensive npm compatibility tests","timestamp":1773404587227,"segment":0}

@@ -5269,6 +5269,67 @@ defmodule NPMTest do
     end
   end
 
+  describe "npm semver: hyphen range completeness" do
+    test "1.0.0 - 3.0.0 includes boundaries" do
+      assert NPMSemver.matches?("1.0.0", "1.0.0 - 3.0.0")
+      assert NPMSemver.matches?("2.5.0", "1.0.0 - 3.0.0")
+      assert NPMSemver.matches?("3.0.0", "1.0.0 - 3.0.0")
+      refute NPMSemver.matches?("3.0.1", "1.0.0 - 3.0.0")
+      refute NPMSemver.matches?("0.9.9", "1.0.0 - 3.0.0")
+    end
+  end
+
+  describe "npm semver: complex union ranges" do
+    test ">=1.0.0 <2.0.0 || >=3.0.0 <4.0.0" do
+      assert NPMSemver.matches?("1.5.0", ">=1.0.0 <2.0.0 || >=3.0.0 <4.0.0")
+      refute NPMSemver.matches?("2.5.0", ">=1.0.0 <2.0.0 || >=3.0.0 <4.0.0")
+      assert NPMSemver.matches?("3.5.0", ">=1.0.0 <2.0.0 || >=3.0.0 <4.0.0")
+      refute NPMSemver.matches?("4.0.0", ">=1.0.0 <2.0.0 || >=3.0.0 <4.0.0")
+    end
+  end
+
+  describe "Linker: link_bins with directories.bin" do
+    @tag :tmp_dir
+    test "creates bins from directories.bin field", %{tmp_dir: dir} do
+      nm = Path.join(dir, "node_modules")
+      pkg_dir = Path.join(nm, "dir-bin-pkg")
+      bin_src = Path.join(pkg_dir, "scripts")
+      File.mkdir_p!(bin_src)
+
+      File.write!(Path.join(pkg_dir, "package.json"), ~s({
+        "name": "dir-bin-pkg",
+        "directories": {"bin": "./scripts"}
+      }))
+
+      File.write!(Path.join(bin_src, "tool-a"), "#!/bin/sh")
+      File.write!(Path.join(bin_src, "tool-b"), "#!/bin/sh")
+
+      NPM.Linker.link_bins(nm, [{"dir-bin-pkg", "1.0.0"}])
+
+      bin_dir = Path.join(nm, ".bin")
+      assert File.exists?(Path.join(bin_dir, "tool-a"))
+      assert File.exists?(Path.join(bin_dir, "tool-b"))
+    end
+  end
+
+  describe "EnvCheck: node_version format" do
+    test "version starts with v when present" do
+      case NPM.EnvCheck.node_version() do
+        {:ok, version} -> assert String.starts_with?(version, "v")
+        :not_found -> :ok
+      end
+    end
+  end
+
+  describe "Packager: files_to_pack always includes package.json" do
+    @tag :tmp_dir
+    test "package.json is always included", %{tmp_dir: dir} do
+      File.write!(Path.join(dir, "package.json"), ~s({"name":"t"}))
+      files = NPM.Packager.files_to_pack(dir)
+      assert Enum.any?(files, &String.ends_with?(&1, "package.json"))
+    end
+  end
+
   describe "npm semver: x-range completeness" do
     test "* matches everything" do
       assert NPMSemver.matches?("0.0.0", "*")
