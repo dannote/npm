@@ -10,27 +10,73 @@ defmodule NPM.Resolver do
 
   @table :npm_resolver_cache
 
-  @doc "Resolve a set of root dependencies to exact versions."
+  @doc """
+  Resolve a set of root dependencies to exact versions.
+
+  Uses a two-phase approach:
+  1. Try flat resolution with PubGrub
+  2. On conflict, identify conflicting packages and retry with
+     those excluded, tracking them as nested dependencies
+
+  Returns `{:ok, %{name => version}}` where the map includes
+  a `:nested` key with nested package info when version conflicts exist.
+  """
   @spec resolve(%{String.t() => String.t()}) ::
           {:ok, %{String.t() => String.t()}} | {:error, String.t()}
   def resolve(root_deps) when map_size(root_deps) == 0, do: {:ok, %{}}
 
   def resolve(root_deps) do
     ensure_cache()
+    resolve_with_nesting(root_deps, MapSet.new(), %{}, 0)
+  end
 
-    dependencies =
-      Enum.map(root_deps, fn {name, range} ->
-        {:ok, constraint} = normalize_range(range)
+  defp resolve_with_nesting(_root_deps, _excluded, _nested, depth) when depth > 5 do
+    {:error, "Too many resolution retries — deeply conflicting dependencies"}
+  end
 
-        %{
-          repo: nil,
-          name: name,
-          constraint: constraint,
-          optional: false,
-          label: name,
-          dependencies: []
-        }
-      end)
+  defp resolve_with_nesting(root_deps, excluded, nested, depth) do
+    dependencies = build_dependencies(root_deps)
+
+    case run_solver(dependencies, excluded) do
+      {:ok, result} ->
+        final = if nested == %{}, do: result, else: Map.put(result, :nested, nested)
+        {:ok, final}
+
+      {:error, message} ->
+        conflict_pkg = extract_conflict_package(message)
+
+        if conflict_pkg && not MapSet.member?(excluded, conflict_pkg) do
+          new_nested = collect_nested_versions(conflict_pkg, excluded)
+          merged_nested = Map.merge(nested, new_nested)
+          new_excluded = MapSet.put(excluded, conflict_pkg)
+          resolve_with_nesting(root_deps, new_excluded, merged_nested, depth + 1)
+        else
+          {:error, message}
+        end
+    end
+  end
+
+  defp build_dependencies(root_deps) do
+    Enum.map(root_deps, fn {name, range} ->
+      {:ok, constraint} = normalize_range(range)
+
+      %{
+        repo: nil,
+        name: name,
+        constraint: constraint,
+        optional: false,
+        label: name,
+        dependencies: []
+      }
+    end)
+  end
+
+  defp run_solver(dependencies, excluded) do
+    ensure_cache()
+    put_excluded(excluded)
+
+    # Remove excluded packages from the version cache to prevent stale data
+    if MapSet.size(excluded) > 0, do: strip_excluded_from_cache(excluded)
 
     case HexSolver.run(__MODULE__, dependencies, [], []) do
       {:ok, solution} ->
@@ -41,6 +87,80 @@ defmodule NPM.Resolver do
 
       {:error, message} ->
         {:error, message}
+    end
+  end
+
+  defp put_excluded(excluded) do
+    ensure_cache()
+    :ets.insert(@table, {:__excluded_packages__, excluded})
+  end
+
+  defp get_excluded do
+    case :ets.lookup(@table, :__excluded_packages__) do
+      [{_, excluded}] -> excluded
+      [] -> MapSet.new()
+    end
+  end
+
+  defp strip_excluded_from_cache(excluded) do
+    # Delete excluded packages entirely from the cache
+    Enum.each(excluded, &:ets.delete(@table, &1))
+
+    # Strip excluded deps from all cached packuments
+    :ets.foldl(
+      fn
+        {key, _}, acc when is_atom(key) ->
+          acc
+
+        {name, packument}, acc ->
+          stripped = strip_deps(packument, excluded)
+
+          if stripped != packument do
+            :ets.insert(@table, {name, stripped})
+          end
+
+          acc
+      end,
+      :ok,
+      @table
+    )
+  end
+
+  defp strip_deps(packument, excluded) do
+    versions =
+      Map.new(packument.versions, fn {ver, info} ->
+        deps = Map.drop(info.dependencies, MapSet.to_list(excluded))
+        {ver, %{info | dependencies: deps}}
+      end)
+
+    %{packument | versions: versions}
+  end
+
+  defp extract_conflict_package(message) do
+    # Look for patterns like: "ms 2.0.0" and "ms 2.1.3" in the error
+    case Regex.scan(~r/"(\S+) (\d+\.\d+\.\d+)"/, message) do
+      matches when length(matches) >= 2 ->
+        names = Enum.map(matches, fn [_, name, _] -> name end)
+
+        names
+        |> Enum.frequencies()
+        |> Enum.filter(fn {_, count} -> count >= 2 end)
+        |> Enum.map(&elem(&1, 0))
+        |> List.first()
+
+      _ ->
+        nil
+    end
+  end
+
+  defp collect_nested_versions(package, _excluded) do
+    case get_cached_packument(package) do
+      {:ok, packument} ->
+        versions = Map.keys(packument.versions) |> Enum.sort()
+        %{package => versions}
+
+      _ ->
+        %{}
     end
   end
 
@@ -95,12 +215,18 @@ defmodule NPM.Resolver do
   end
 
   defp deps_for_version(packument, version_str) do
+    excluded = get_excluded()
+
     case Map.get(packument.versions, version_str) do
       nil ->
         :error
 
       info ->
-        deps = Enum.flat_map(info.dependencies, &to_solver_dep/1)
+        deps =
+          info.dependencies
+          |> Enum.reject(fn {name, _} -> MapSet.member?(excluded, name) end)
+          |> Enum.flat_map(&to_solver_dep/1)
+
         {:ok, deps}
     end
   end

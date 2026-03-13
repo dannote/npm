@@ -304,16 +304,26 @@ defmodule NPM.IntegrationTest do
       assert map_size(resolved) == 1
     end
 
-    test "express@4.x fails due to ms version conflict (known limitation)" do
-      # npm allows multiple versions of 'ms' in nested node_modules.
-      # PubGrub (flat solver) can't handle this. This tests the current behavior.
-      # debug@2.6.9 → ms@2.0.0, send@0.19.0 → ms@2.1.3
-      assert {:error, message} = NPM.Resolver.resolve(%{"express" => "^4.21.0"})
-      assert message =~ "ms"
+    test "express resolves with nested version conflict handling" do
+      {:ok, resolved} = NPM.Resolver.resolve(%{"express" => "^4.21.0"})
+
+      flat = Map.delete(resolved, :nested)
+      nested = Map.get(resolved, :nested, %{})
+
+      assert Map.has_key?(flat, "express")
+      assert Map.has_key?(flat, "debug")
+      assert Map.has_key?(flat, "send")
+      assert map_size(flat) >= 30
+
+      # ms should be excluded from flat and tracked as nested
+      refute Map.has_key?(flat, "ms")
+      assert Map.has_key?(nested, "ms")
     end
 
     test "resolves packages with compatible transitive deps" do
       {:ok, resolved} = NPM.Resolver.resolve(%{"accepts" => "~1.3.8"})
+      # No nested key when there are no conflicts
+      refute Map.has_key?(resolved, :nested)
       assert map_size(resolved) >= 3
       assert Map.has_key?(resolved, "accepts")
       assert Map.has_key?(resolved, "mime-types")
