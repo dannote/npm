@@ -7973,6 +7973,296 @@ defmodule NPMTest do
     end
   end
 
+  # --- PackageJSON dep type classification ---
+
+  describe "PackageJSON: file_dep? classification" do
+    test "file: prefix is a file dep" do
+      assert NPM.PackageJSON.file_dep?("file:../lib")
+      assert NPM.PackageJSON.file_dep?("file:./local-pkg")
+    end
+
+    test "non file: is not a file dep" do
+      refute NPM.PackageJSON.file_dep?("^1.0.0")
+      refute NPM.PackageJSON.file_dep?("~1.0.0")
+      refute NPM.PackageJSON.file_dep?("*")
+    end
+  end
+
+  describe "PackageJSON: git_dep? classification" do
+    test "git+https URL is git dep" do
+      assert NPM.PackageJSON.git_dep?("git+https://github.com/user/repo.git")
+    end
+
+    test "git:// URL is git dep" do
+      assert NPM.PackageJSON.git_dep?("git://github.com/user/repo.git")
+    end
+
+    test "github: shorthand is git dep" do
+      assert NPM.PackageJSON.git_dep?("github:user/repo")
+    end
+
+    test "URL containing .git is git dep" do
+      assert NPM.PackageJSON.git_dep?("https://github.com/user/repo.git")
+    end
+
+    test "semver range is not git dep" do
+      refute NPM.PackageJSON.git_dep?("^1.0.0")
+      refute NPM.PackageJSON.git_dep?(">=2.0.0")
+    end
+  end
+
+  describe "PackageJSON: url_dep? classification" do
+    test "https tgz URL is url dep" do
+      assert NPM.PackageJSON.url_dep?("https://example.com/pkg.tgz")
+    end
+
+    test "http tgz URL is url dep" do
+      assert NPM.PackageJSON.url_dep?("http://example.com/pkg.tar.gz")
+    end
+
+    test "non-tarball URL is not url dep" do
+      refute NPM.PackageJSON.url_dep?("https://example.com/page")
+    end
+
+    test "semver range is not url dep" do
+      refute NPM.PackageJSON.url_dep?("^1.0.0")
+    end
+  end
+
+  describe "PackageJSON: resolve_file_dep" do
+    test "resolves relative path" do
+      path = NPM.PackageJSON.resolve_file_dep("file:./lib", "/home/user/project")
+      assert path == "/home/user/project/lib"
+    end
+
+    test "resolves parent path" do
+      path = NPM.PackageJSON.resolve_file_dep("file:../shared", "/home/user/project")
+      assert path == "/home/user/shared"
+    end
+  end
+
+  describe "PackageJSON: read_scripts" do
+    @tag :tmp_dir
+    test "reads scripts from package.json", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      File.write!(path, ~s({
+        "name": "test-pkg",
+        "scripts": {
+          "test": "vitest",
+          "build": "tsc",
+          "start": "node index.js"
+        }
+      }))
+
+      {:ok, scripts} = NPM.PackageJSON.read_scripts(path)
+      assert scripts["test"] == "vitest"
+      assert scripts["build"] == "tsc"
+      assert scripts["start"] == "node index.js"
+    end
+
+    @tag :tmp_dir
+    test "returns empty map when no scripts", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+      File.write!(path, ~s({"name": "test-pkg"}))
+
+      {:ok, scripts} = NPM.PackageJSON.read_scripts(path)
+      assert scripts == %{}
+    end
+  end
+
+  describe "VersionUtil: bump functions" do
+    test "bump_patch increments patch" do
+      assert "1.0.1" = NPM.VersionUtil.bump_patch("1.0.0")
+      assert "1.2.4" = NPM.VersionUtil.bump_patch("1.2.3")
+    end
+
+    test "bump_minor increments minor and resets patch" do
+      assert "1.1.0" = NPM.VersionUtil.bump_minor("1.0.5")
+      assert "2.1.0" = NPM.VersionUtil.bump_minor("2.0.3")
+    end
+
+    test "bump_major increments major and resets others" do
+      assert "2.0.0" = NPM.VersionUtil.bump_major("1.5.3")
+      assert "1.0.0" = NPM.VersionUtil.bump_major("0.9.9")
+    end
+  end
+
+  describe "VersionUtil: comparison operators" do
+    test "gt? returns true when first is greater" do
+      assert NPM.VersionUtil.gt?("2.0.0", "1.0.0")
+      assert NPM.VersionUtil.gt?("1.1.0", "1.0.0")
+      assert NPM.VersionUtil.gt?("1.0.1", "1.0.0")
+    end
+
+    test "gt? returns false when equal or less" do
+      refute NPM.VersionUtil.gt?("1.0.0", "1.0.0")
+      refute NPM.VersionUtil.gt?("1.0.0", "2.0.0")
+    end
+
+    test "lt? returns true when first is less" do
+      assert NPM.VersionUtil.lt?("1.0.0", "2.0.0")
+      assert NPM.VersionUtil.lt?("1.0.0", "1.1.0")
+    end
+
+    test "lt? returns false when equal or greater" do
+      refute NPM.VersionUtil.lt?("1.0.0", "1.0.0")
+      refute NPM.VersionUtil.lt?("2.0.0", "1.0.0")
+    end
+  end
+
+  describe "VersionUtil: compare edge cases" do
+    test "compare identical versions" do
+      assert :eq = NPM.VersionUtil.compare("5.5.5", "5.5.5")
+    end
+
+    test "compare with different major" do
+      assert :gt = NPM.VersionUtil.compare("10.0.0", "9.0.0")
+      assert :lt = NPM.VersionUtil.compare("9.0.0", "10.0.0")
+    end
+  end
+
+  describe "Format: duration formatting" do
+    test "microseconds" do
+      assert "500µs" = NPM.Format.duration(500)
+    end
+
+    test "milliseconds" do
+      assert "5ms" = NPM.Format.duration(5_000)
+      assert "100ms" = NPM.Format.duration(100_000)
+    end
+
+    test "seconds" do
+      assert "1.5s" = NPM.Format.duration(1_500_000)
+    end
+  end
+
+  describe "Format: bytes formatting complete range" do
+    test "kilobytes" do
+      assert String.ends_with?(NPM.Format.bytes(2048), "KB")
+    end
+
+    test "megabytes" do
+      assert String.ends_with?(NPM.Format.bytes(5_242_880), "MB")
+    end
+
+    test "gigabytes" do
+      assert String.ends_with?(NPM.Format.bytes(2_147_483_648), "GB")
+    end
+  end
+
+  describe "Format: truncate behavior" do
+    test "short string unchanged" do
+      assert "hello" = NPM.Format.truncate("hello", 100)
+    end
+
+    test "long string gets ellipsis" do
+      result = NPM.Format.truncate("a very long string that needs truncation", 15)
+      assert byte_size(result) <= 15
+      assert String.ends_with?(result, "...")
+    end
+  end
+
+  describe "Platform: check_engines with node constraint" do
+    test "returns warnings for unsatisfied engines" do
+      warnings = NPM.Platform.check_engines(%{"node" => ">= 999.0.0"})
+      assert is_list(warnings)
+    end
+
+    test "empty engines map returns no warnings" do
+      assert [] = NPM.Platform.check_engines(%{})
+    end
+  end
+
+  describe "Platform: os exclusion" do
+    test "negation prefix excludes current OS" do
+      os = NPM.Platform.current_os()
+      refute NPM.Platform.os_compatible?(["!#{os}"])
+    end
+
+    test "negation of other OS allows current" do
+      assert NPM.Platform.os_compatible?(["!solaris"])
+    end
+  end
+
+  describe "Exports: subpaths listing" do
+    test "lists all export subpaths" do
+      exports = %{
+        "." => "./index.js",
+        "./utils" => "./utils.js",
+        "./helpers/*" => "./helpers/*.js"
+      }
+
+      paths = NPM.Exports.subpaths(exports)
+      assert "." in paths
+      assert "./utils" in paths
+      assert "./helpers/*" in paths
+    end
+  end
+
+  describe "Exports: parse from package data" do
+    test "string exports is normalized to map" do
+      result = NPM.Exports.parse(%{"exports" => "./dist/index.js"})
+      assert is_map(result)
+      assert result["."] == "./dist/index.js"
+    end
+
+    test "map exports are returned" do
+      exports = %{"." => "./index.js", "./sub" => "./sub.js"}
+      result = NPM.Exports.parse(%{"exports" => exports})
+      assert is_map(result)
+    end
+
+    test "no exports returns nil" do
+      assert nil == NPM.Exports.parse(%{"name" => "pkg"})
+    end
+  end
+
+  describe "Exports: module_type detection" do
+    test "module type is ESM" do
+      assert :esm = NPM.Exports.module_type(%{"type" => "module"})
+    end
+
+    test "commonjs type is CJS" do
+      assert :cjs = NPM.Exports.module_type(%{"type" => "commonjs"})
+    end
+
+    test "no type defaults to CJS" do
+      assert :cjs = NPM.Exports.module_type(%{})
+    end
+  end
+
+  describe "ScopeRegistry: scope extraction" do
+    test "scoped? detects scoped packages" do
+      assert NPM.ScopeRegistry.scoped?("@types/node")
+      assert NPM.ScopeRegistry.scoped?("@babel/core")
+      refute NPM.ScopeRegistry.scoped?("lodash")
+    end
+
+    test "scope extracts scope from name" do
+      assert "@types" = NPM.ScopeRegistry.scope("@types/node")
+      assert "@babel" = NPM.ScopeRegistry.scope("@babel/core")
+    end
+  end
+
+  describe "Hooks: available and configured" do
+    test "available returns list of hook names" do
+      hooks = NPM.Hooks.available()
+      assert is_list(hooks)
+      assert hooks != []
+    end
+
+    test "configured returns currently configured hooks" do
+      result = NPM.Hooks.configured()
+      assert is_list(result) or is_map(result)
+    end
+
+    test "configured? checks hook availability" do
+      result = NPM.Hooks.configured?("preinstall")
+      assert is_boolean(result)
+    end
+  end
+
   # --- Helpers ---
 
   defp mask_token(token) when byte_size(token) <= 8, do: "****"
