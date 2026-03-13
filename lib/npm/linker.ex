@@ -171,22 +171,32 @@ defmodule NPM.Linker do
     end
   end
 
-  defp parse_bin_field(%{"bin" => bin, "name" => name}, pkg_dir) when is_binary(bin) do
-    command =
-      if String.contains?(name, "/"), do: String.split(name, "/") |> List.last(), else: name
-
-    [{command, Path.expand(bin, pkg_dir)}]
-  end
-
-  defp parse_bin_field(%{"bin" => bin}, pkg_dir) when is_binary(bin) do
-    [{Path.basename(pkg_dir), Path.expand(bin, pkg_dir)}]
+  defp parse_bin_field(%{"bin" => bin} = data, pkg_dir) when is_binary(bin) do
+    [{bin_command_name(data, pkg_dir), Path.expand(bin, pkg_dir)}]
   end
 
   defp parse_bin_field(%{"bin" => bin}, pkg_dir) when is_map(bin) do
     Enum.map(bin, fn {command, path} -> {command, Path.expand(path, pkg_dir)} end)
   end
 
+  defp parse_bin_field(%{"directories" => %{"bin" => bin_dir}}, pkg_dir) do
+    dir = Path.join(pkg_dir, bin_dir)
+
+    dir
+    |> list_dir()
+    |> Enum.map(fn file -> {Path.rootname(file), Path.join(dir, file)} end)
+  end
+
   defp parse_bin_field(_data, _pkg_dir), do: []
+
+  defp bin_command_name(%{"name" => name}, _pkg_dir) do
+    case String.split(name, "/") do
+      [_scope, pkg] -> pkg
+      _ -> name
+    end
+  end
+
+  defp bin_command_name(_data, pkg_dir), do: Path.basename(pkg_dir)
 
   defp list_dir(path) do
     case File.ls(path) do

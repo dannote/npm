@@ -891,6 +891,140 @@ defmodule NPMTest do
 
       assert File.exists?(Path.join([nm_dir, ".bin", "tool"]))
     end
+
+    @tag :tmp_dir
+    test "handles directories.bin field", %{tmp_dir: dir} do
+      nm_dir = Path.join(dir, "node_modules")
+      pkg_dir = Path.join(nm_dir, "dir-bin-tool")
+      bin_dir = Path.join(pkg_dir, "bin")
+      File.mkdir_p!(bin_dir)
+
+      File.write!(
+        Path.join(pkg_dir, "package.json"),
+        ~s({"name":"dir-bin-tool","directories":{"bin":"./bin"}})
+      )
+
+      File.write!(Path.join(bin_dir, "run.js"), "#!/usr/bin/env node")
+      File.write!(Path.join(bin_dir, "test.js"), "#!/usr/bin/env node")
+
+      NPM.Linker.link_bins(nm_dir, [{"dir-bin-tool", "1.0.0"}])
+
+      assert File.exists?(Path.join([nm_dir, ".bin", "run"]))
+      assert File.exists?(Path.join([nm_dir, ".bin", "test"]))
+    end
+
+    @tag :tmp_dir
+    test "handles missing package.json gracefully", %{tmp_dir: dir} do
+      nm_dir = Path.join(dir, "node_modules")
+      File.mkdir_p!(nm_dir)
+
+      NPM.Linker.link_bins(nm_dir, [{"ghost-pkg", "1.0.0"}])
+
+      refute File.exists?(Path.join([nm_dir, ".bin"]))
+    end
+  end
+
+  # --- Linker.hoist edge cases ---
+
+  describe "Linker.hoist edge cases" do
+    test "deduplicates same package appearing multiple times" do
+      lockfile = %{
+        "foo" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      result = NPM.Linker.hoist(lockfile)
+      assert length(result) == 1
+      assert {"foo", "1.0.0"} in result
+    end
+
+    test "handles scoped packages in hoist" do
+      lockfile = %{
+        "@scope/a" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}},
+        "@scope/b" => %{version: "2.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      result = NPM.Linker.hoist(lockfile)
+      names = Enum.map(result, &elem(&1, 0)) |> Enum.sort()
+      assert names == ["@scope/a", "@scope/b"]
+    end
+
+    test "single package returns single entry" do
+      lockfile = %{
+        "only-one" => %{version: "3.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      [{name, version}] = NPM.Linker.hoist(lockfile)
+      assert name == "only-one"
+      assert version == "3.0.0"
+    end
+  end
+
+  # --- Tarball.extract edge cases ---
+
+  describe "Tarball.extract edge cases" do
+    @tag :tmp_dir
+    test "handles empty tarball", %{tmp_dir: dir} do
+      files = %{}
+      tgz = create_test_tgz(files)
+      assert {:ok, 0} = NPM.Tarball.extract(tgz, dir)
+    end
+
+    @tag :tmp_dir
+    test "handles deeply nested paths", %{tmp_dir: dir} do
+      tgz = create_test_tgz(%{"package/a/b/c/d/e/deep.txt" => "deep value"})
+
+      assert {:ok, 1} = NPM.Tarball.extract(tgz, dir)
+      assert File.read!(Path.join(dir, "a/b/c/d/e/deep.txt")) == "deep value"
+    end
+
+    @tag :tmp_dir
+    test "preserves file content exactly", %{tmp_dir: dir} do
+      content = String.duplicate("x", 10_000) <> "\n" <> String.duplicate("y", 10_000)
+      tgz = create_test_tgz(%{"package/big.txt" => content})
+
+      assert {:ok, 1} = NPM.Tarball.extract(tgz, dir)
+      assert File.read!(Path.join(dir, "big.txt")) == content
+    end
+  end
+
+  # --- Lockfile format ---
+
+  describe "Lockfile format" do
+    @tag :tmp_dir
+    test "lockfile contains lockfileVersion", %{tmp_dir: dir} do
+      path = Path.join(dir, "npm.lock")
+
+      lockfile = %{
+        "pkg" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      NPM.Lockfile.write(lockfile, path)
+      content = File.read!(path) |> :json.decode()
+      assert content["lockfileVersion"] == 1
+    end
+
+    @tag :tmp_dir
+    test "lockfile packages section has all required fields", %{tmp_dir: dir} do
+      path = Path.join(dir, "npm.lock")
+
+      lockfile = %{
+        "test" => %{
+          version: "2.0.0",
+          integrity: "sha512-abc==",
+          tarball: "https://example.com/test.tgz",
+          dependencies: %{"dep" => "^1.0"}
+        }
+      }
+
+      NPM.Lockfile.write(lockfile, path)
+      {:ok, read_back} = NPM.Lockfile.read(path)
+
+      entry = read_back["test"]
+      assert entry.version == "2.0.0"
+      assert entry.integrity == "sha512-abc=="
+      assert entry.tarball == "https://example.com/test.tgz"
+      assert entry.dependencies == %{"dep" => "^1.0"}
+    end
   end
 
   # --- Linker.prune ---

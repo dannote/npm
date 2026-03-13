@@ -4,3 +4,4 @@
 {"run":3,"commit":"5fdf8e1","metric":84,"metrics":{},"status":"keep","description":"Add bin linking (node_modules/.bin/) with string/map bin fields, scoped packages","timestamp":1773396168325,"segment":0}
 {"run":4,"commit":"527ca77","metric":87,"metrics":{},"status":"keep","description":"Add mix npm.update, mix npm.run (scripts), read_scripts in PackageJSON","timestamp":1773396242393,"segment":0}
 {"run":5,"commit":"e159548","metric":99,"metrics":{},"status":"keep","description":"Add mix npm.info, mix npm.why, peerDependencies warnings, optionalDependencies parsing, pruning + bin integration tests","timestamp":1773396387414,"segment":0}
+{"run":6,"commit":"27ab44b","metric":104,"metrics":{},"status":"keep","description":"Add mix npm.cache, mix npm.exec, mix npm.init tasks; more round-trip and integration tests","timestamp":1773396479461,"segment":0}
