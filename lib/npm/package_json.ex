@@ -97,6 +97,25 @@ defmodule NPM.PackageJSON do
     end)
   end
 
+  @doc """
+  Check if a dependency range refers to a local file path.
+
+  Supports `file:../path` and `file:./path` references.
+  """
+  @spec file_dep?(String.t()) :: boolean()
+  def file_dep?("file:" <> _), do: true
+  def file_dep?(_), do: false
+
+  @doc """
+  Resolve a file dependency path.
+
+  Returns the absolute path for a `file:` reference.
+  """
+  @spec resolve_file_dep(String.t(), String.t()) :: String.t()
+  def resolve_file_dep("file:" <> path, base_dir) do
+    Path.expand(path, base_dir)
+  end
+
   @doc "Read overrides from `package.json`."
   @spec read_overrides(String.t()) :: {:ok, %{String.t() => String.t()}} | {:error, term()}
   def read_overrides(path \\ @default_path) do

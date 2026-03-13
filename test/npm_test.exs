@@ -213,6 +213,33 @@ defmodule NPMTest do
     end
   end
 
+  # --- PackageJSON file dependencies ---
+
+  describe "PackageJSON.file_dep?" do
+    test "recognizes file: prefix" do
+      assert NPM.PackageJSON.file_dep?("file:../my-lib")
+      assert NPM.PackageJSON.file_dep?("file:./local-pkg")
+    end
+
+    test "rejects non-file deps" do
+      refute NPM.PackageJSON.file_dep?("^4.0.0")
+      refute NPM.PackageJSON.file_dep?("latest")
+      refute NPM.PackageJSON.file_dep?("~1.2.3")
+    end
+  end
+
+  describe "PackageJSON.resolve_file_dep" do
+    test "resolves relative path" do
+      result = NPM.PackageJSON.resolve_file_dep("file:../my-lib", "/home/user/project")
+      assert result == "/home/user/my-lib"
+    end
+
+    test "resolves current dir path" do
+      result = NPM.PackageJSON.resolve_file_dep("file:./packages/core", "/home/user/project")
+      assert result == "/home/user/project/packages/core"
+    end
+  end
+
   # --- PackageJSON.read_overrides ---
 
   describe "PackageJSON.read_overrides" do
@@ -2138,6 +2165,30 @@ defmodule NPMTest do
 
       assert read_back["@scope/pkg"].integrity == "sha512-abc+def/ghi=="
       assert read_back["@scope/pkg"].tarball =~ "%2f"
+    end
+  end
+
+  # --- Lockfile sorted listing ---
+
+  describe "Lockfile listing" do
+    @tag :tmp_dir
+    test "packages can be listed and sorted", %{tmp_dir: dir} do
+      path = Path.join(dir, "npm.lock")
+
+      lockfile = %{
+        "z-pkg" => %{version: "2.0.0", integrity: "", tarball: "", dependencies: %{}},
+        "a-pkg" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      NPM.Lockfile.write(lockfile, path)
+      {:ok, read_back} = NPM.Lockfile.read(path)
+
+      packages =
+        read_back
+        |> Enum.map(fn {name, entry} -> {name, entry.version} end)
+        |> Enum.sort_by(&elem(&1, 0))
+
+      assert [{"a-pkg", "1.0.0"}, {"z-pkg", "2.0.0"}] = packages
     end
   end
 
