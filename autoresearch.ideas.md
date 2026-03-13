@@ -6,17 +6,17 @@
 - ~~Scripts, Token, Publish, Size, BinResolver tests, Compiler tests~~
 - ~~Split monolith test file, ex_dna quality gate, fixed code clones~~
 - ~~Init, Link, CI, Doctor, Completion, Resolutions, Import, EngineCheck~~
-- ~~BundleDeps, OptionalDeps, DevDeps~~
+- ~~BundleDeps, OptionalDeps, DevDeps, Exports extensions, Exec, Rebuild~~
+- ~~Config extensions, PeerDepsCheck, Normalize, TypesResolution, Changelog~~
+- ~~Duplicate, Ignore, GitInfo~~
+- ~~Refactored Workspace.topo_sort and DepGraph.cycles to use :digraph_utils~~
 
 ## Medium Priority: New Modules
-- `NPM.Exports` — package.json "exports" field parsing (conditional exports, subpath patterns)
-- `NPM.TypesResolution` — resolve @types/ packages for TypeScript consumers
-- `NPM.PeerDepsCheck` — deep peer dependency compatibility scanner across all installed packages
-- `NPM.Workspaces` — monorepo workspace protocol support (workspace:* ranges)
-- `NPM.Config` — .npmrc config file parsing and merging (project + user + global)
-- `NPM.Exec` — npx-style: resolve and run binaries from packages
-- `NPM.ScopeRegistry` — per-scope registry mapping
-- `NPM.Rebuild` — rebuild native addons after install
+- `NPM.Provenance` — SLSA provenance / supply chain attestation checking
+- `NPM.SBOM` — Software Bill of Materials generation (CycloneDX/SPDX)
+- `NPM.Cve` — CVE database cross-referencing
+- `NPM.FileSize` — individual file size analysis within packages
+- `NPM.VersionRange` — advanced version range manipulation (intersect, union, complement)
 
 ## Medium Priority: More Tests
 - Error handling paths in Registry, Tarball, Cache
@@ -26,7 +26,6 @@
 - PackageSpec complex range parsing edge cases
 
 ## Lower Priority: Enhance Existing
-- Pre/post install script execution in Hooks
-- devDependencies support in Resolver (--production flag)
+- Workspace module: workspace:* protocol range support
 - CI module: clean_and_install! action
 - Link module: global link registry
