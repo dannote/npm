@@ -4917,6 +4917,56 @@ defmodule NPMTest do
     end
   end
 
+  describe "Resolver: overrides stored correctly" do
+    test "overrides are accessible after resolution" do
+      NPM.Resolver.clear_cache()
+      NPM.Resolver.resolve(%{}, overrides: %{"ms" => "2.1.3"})
+      # Cache should exist with overrides
+      assert is_map(NPM.Resolver.get_original_deps("ms"))
+    end
+  end
+
+  describe "Linker: hoist with dependencies" do
+    test "all packages are represented in hoist output" do
+      lockfile = %{
+        "a" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{"b" => "^1"}},
+        "b" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}},
+        "c" => %{version: "2.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      tree = NPM.Linker.hoist(lockfile)
+      names = Enum.map(tree, &elem(&1, 0)) |> Enum.sort()
+      assert names == ["a", "b", "c"]
+    end
+  end
+
+  describe "Cache: cached? for non-cached package" do
+    test "returns false for uncached package" do
+      refute NPM.Cache.cached?("definitely-not-cached-#{:rand.uniform(999_999)}", "999.999.999")
+    end
+  end
+
+  describe "SemverUtil: filter with OR ranges" do
+    test "filter with union range" do
+      versions = ["1.0.0", "2.0.0", "3.0.0", "4.0.0"]
+      result = NPM.SemverUtil.filter(versions, "^1.0.0 || ^3.0.0")
+      assert "1.0.0" in result
+      assert "3.0.0" in result
+      refute "2.0.0" in result
+      refute "4.0.0" in result
+    end
+  end
+
+  describe "Alias: parse with different formats" do
+    test "alias with tilde range" do
+      assert {:alias, "react", "~18.0.0"} = NPM.Alias.parse("npm:react@~18.0.0")
+    end
+
+    test "alias with exact version" do
+      assert {:alias, "lodash", "4.17.21"} = NPM.Alias.parse("npm:lodash@4.17.21")
+    end
+  end
+
   describe "npm semver: pre-release detection" do
     test "pre-release version is detected by VersionUtil" do
       assert NPM.VersionUtil.prerelease?("1.0.0-alpha")
