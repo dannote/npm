@@ -53,5 +53,30 @@ defmodule NPM.DuplicateTest do
     test "zero for no duplicates" do
       assert 0 = NPM.Duplicate.potential_savings([])
     end
+
+    test "single duplicate" do
+      dupes = [%{name: "a", versions: ["1.0", "2.0"]}]
+      assert 1 = NPM.Duplicate.potential_savings(dupes)
+    end
+  end
+
+  describe "format_report details" do
+    test "shows count in header" do
+      dupes = [
+        %{name: "a", versions: ["1.0", "2.0"]},
+        %{name: "b", versions: ["3.0", "4.0"]}
+      ]
+
+      formatted = NPM.Duplicate.format_report(dupes)
+      assert formatted =~ "2"
+    end
+
+    test "includes all version numbers" do
+      dupes = [%{name: "pkg", versions: ["1.0.0", "1.1.0", "2.0.0"]}]
+      formatted = NPM.Duplicate.format_report(dupes)
+      assert formatted =~ "1.0.0"
+      assert formatted =~ "1.1.0"
+      assert formatted =~ "2.0.0"
+    end
   end
 end
