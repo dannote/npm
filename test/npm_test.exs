@@ -4445,6 +4445,91 @@ defmodule NPMTest do
     end
   end
 
+  describe "Registry: scoped package URL encoding" do
+    test "encode_package handles scoped packages" do
+      assert NPM.Registry.encode_package("@babel/core") == "@babel%2fcore"
+    end
+
+    test "encode_package leaves unscoped packages unchanged" do
+      assert NPM.Registry.encode_package("lodash") == "lodash"
+    end
+
+    test "encode_package handles deeply scoped names" do
+      assert NPM.Registry.encode_package("@types/node") == "@types%2fnode"
+    end
+  end
+
+  describe "RegistryMirror: URL rewriting" do
+    test "known_mirrors returns map of mirror names to URLs" do
+      mirrors = NPM.RegistryMirror.known_mirrors()
+      assert is_map(mirrors)
+      assert Map.has_key?(mirrors, "npmjs")
+      assert mirrors["npmjs"] == "https://registry.npmjs.org"
+    end
+
+    test "rewrite_tarball_url replaces registry host" do
+      mirror = "https://registry.npmmirror.com"
+
+      rewritten =
+        NPM.RegistryMirror.rewrite_tarball_url(
+          "https://registry.npmjs.org/lodash/-/lodash-4.17.21.tgz",
+          mirror
+        )
+
+      assert String.starts_with?(rewritten, mirror)
+      assert String.contains?(rewritten, "lodash")
+    end
+
+    test "known_mirror? checks if URL is a known mirror" do
+      assert NPM.RegistryMirror.known_mirror?("https://registry.npmmirror.com")
+    end
+  end
+
+  describe "Linker: prune removes stale packages" do
+    @tag :tmp_dir
+    test "prune removes packages not in expected set", %{tmp_dir: dir} do
+      nm = Path.join(dir, "node_modules")
+      File.mkdir_p!(Path.join(nm, "old-pkg"))
+      File.write!(Path.join([nm, "old-pkg", "index.js"]), "")
+      File.mkdir_p!(Path.join(nm, "keep-pkg"))
+      File.write!(Path.join([nm, "keep-pkg", "index.js"]), "")
+
+      expected = MapSet.new(["keep-pkg"])
+      NPM.Linker.prune(nm, expected)
+
+      assert File.exists?(Path.join(nm, "keep-pkg"))
+      refute File.exists?(Path.join(nm, "old-pkg"))
+    end
+
+    @tag :tmp_dir
+    test "prune handles scoped packages", %{tmp_dir: dir} do
+      nm = Path.join(dir, "node_modules")
+      File.mkdir_p!(Path.join([nm, "@scope", "keep"]))
+      File.write!(Path.join([nm, "@scope", "keep", "index.js"]), "")
+      File.mkdir_p!(Path.join([nm, "@scope", "remove"]))
+      File.write!(Path.join([nm, "@scope", "remove", "index.js"]), "")
+
+      expected = MapSet.new(["@scope/keep"])
+      NPM.Linker.prune(nm, expected)
+
+      assert File.exists?(Path.join([nm, "@scope", "keep"]))
+      refute File.exists?(Path.join([nm, "@scope", "remove"]))
+    end
+
+    @tag :tmp_dir
+    test "prune preserves .bin directory", %{tmp_dir: dir} do
+      nm = Path.join(dir, "node_modules")
+      bin_dir = Path.join(nm, ".bin")
+      File.mkdir_p!(bin_dir)
+      File.write!(Path.join(bin_dir, "my-tool"), "#!/bin/sh")
+
+      expected = MapSet.new()
+      NPM.Linker.prune(nm, expected)
+
+      assert File.exists?(Path.join(bin_dir, "my-tool"))
+    end
+  end
+
   describe "Resolver: override support" do
     test "overrides are stored and retrieved from cache" do
       NPM.Resolver.clear_cache()
