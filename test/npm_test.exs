@@ -2687,6 +2687,111 @@ defmodule NPMTest do
     end
   end
 
+  # --- VersionUtil ---
+
+  describe "VersionUtil.parse_triple" do
+    test "parses standard version" do
+      assert {:ok, {1, 2, 3}} = NPM.VersionUtil.parse_triple("1.2.3")
+    end
+
+    test "returns error for invalid" do
+      assert :error = NPM.VersionUtil.parse_triple("nope")
+    end
+  end
+
+  describe "VersionUtil.compare" do
+    test "gt" do
+      assert :gt = NPM.VersionUtil.compare("2.0.0", "1.0.0")
+    end
+
+    test "lt" do
+      assert :lt = NPM.VersionUtil.compare("1.0.0", "2.0.0")
+    end
+
+    test "eq" do
+      assert :eq = NPM.VersionUtil.compare("1.0.0", "1.0.0")
+    end
+  end
+
+  describe "VersionUtil.gt?/lt?" do
+    test "gt? true" do
+      assert NPM.VersionUtil.gt?("2.0.0", "1.0.0")
+    end
+
+    test "gt? false" do
+      refute NPM.VersionUtil.gt?("1.0.0", "2.0.0")
+    end
+
+    test "lt? true" do
+      assert NPM.VersionUtil.lt?("1.0.0", "2.0.0")
+    end
+  end
+
+  describe "VersionUtil.major/minor" do
+    test "major" do
+      assert 5 = NPM.VersionUtil.major("5.3.1")
+    end
+
+    test "minor" do
+      assert 3 = NPM.VersionUtil.minor("5.3.1")
+    end
+
+    test "invalid" do
+      assert :error = NPM.VersionUtil.major("bad")
+    end
+  end
+
+  describe "VersionUtil.prerelease?" do
+    test "detects prerelease" do
+      assert NPM.VersionUtil.prerelease?("1.0.0-alpha.1")
+    end
+
+    test "stable is not prerelease" do
+      refute NPM.VersionUtil.prerelease?("1.0.0")
+    end
+
+    test "invalid is not prerelease" do
+      refute NPM.VersionUtil.prerelease?("nope")
+    end
+  end
+
+  describe "VersionUtil.bump_*" do
+    test "bump_patch" do
+      assert "1.2.4" = NPM.VersionUtil.bump_patch("1.2.3")
+    end
+
+    test "bump_minor" do
+      assert "1.3.0" = NPM.VersionUtil.bump_minor("1.2.3")
+    end
+
+    test "bump_major" do
+      assert "2.0.0" = NPM.VersionUtil.bump_major("1.2.3")
+    end
+
+    test "bump invalid returns error" do
+      assert :error = NPM.VersionUtil.bump_patch("bad")
+    end
+  end
+
+  describe "VersionUtil.sort/latest" do
+    test "sorts versions ascending" do
+      assert ["1.0.0", "1.2.0", "2.0.0"] =
+               NPM.VersionUtil.sort(["2.0.0", "1.0.0", "1.2.0"])
+    end
+
+    test "latest returns highest" do
+      assert "3.0.0" = NPM.VersionUtil.latest(["1.0.0", "3.0.0", "2.0.0"])
+    end
+
+    test "latest of empty is nil" do
+      assert nil == NPM.VersionUtil.latest([])
+    end
+
+    test "skips invalid versions" do
+      assert ["1.0.0"] = NPM.VersionUtil.sort(["bad", "1.0.0", "nope"])
+    end
+  end
+
   # --- Publish validation ---
 
   describe "publish validation" do
