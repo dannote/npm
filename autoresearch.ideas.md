@@ -1,26 +1,26 @@
 # Autoresearch Ideas
 
-## Implemented
-- ~~60+ modules, 80+ test files, 1800 tests~~
-- ~~All medium priority modules done (Provenance, SBOM, Cve, FileSize, VersionRange, etc.)~~
-- ~~:digraph_utils refactor, ex_dna gate, edge case sweeps~~
+## Implemented (91 lib modules, 98 test files, 2000 tests)
 
 ## New Modules
-- `NPM.Validate` — comprehensive package.json schema validation (required fields, types, known field checks)
-- `NPM.Scope` — scope management (parse @scope/name, extract scope, validate scope names)
-- `NPM.Dist` — dist metadata (tarball URLs, shasum, file count, unpacked size)
-- `NPM.Os` — os/cpu field checking (platform compatibility matrix)
-- `NPM.Hooks` edge cases — pre/post lifecycle hooks ordering and filtering
-- `NPM.Monorepo` — detect monorepo type (npm workspaces, lerna, turborepo, nx)
+- `NPM.Validate` — package.json schema validation (required fields, types, known fields, warn unknown)
+- `NPM.Engines` — engine field parsing/matching (node, npm, yarn version constraints)
+- `NPM.Funding` — funding field parsing (url, type, multiple funders)
+- `NPM.DepRange` — dependency range analysis (how many pinned, floated, star, url deps)
+- `NPM.InstallStrategy` — hoisted vs nested vs isolated install strategies
+- `NPM.NodeVersion` — .nvmrc/.node-version/.tool-versions parsing
+- `NPM.Overrides` extensions — flatten, apply, validate override specs
+- `NPM.Alias` extensions — resolve npm:pkg@ver aliases, detect cycles
 
 ## More Tests for Existing Modules
 - Registry error handling paths (network failures, invalid JSON, 404)
 - Tarball error paths (corrupt archive, integrity mismatch)
-- Cache error paths (disk full, permission denied)
 - Resolver edge cases (circular deps, conflicting ranges)
 - LockMerge edge cases (conflicting merges, missing entries)
 - PackageSpec complex ranges (pre-release, build metadata, tags)
 - Mix task tests (argument parsing, output format)
+- Compiler edge cases (missing package.json, invalid JSON)
+- FrozenInstall additional validation scenarios
 
 ## Enhance Existing
 - Workspace: workspace:* protocol range support
