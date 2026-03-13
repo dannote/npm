@@ -2687,6 +2687,101 @@ defmodule NPMTest do
     end
   end
 
+  # --- Exports ---
+
+  describe "Exports.parse" do
+    test "parses string shorthand" do
+      pkg = %{"exports" => "./index.js"}
+      assert NPM.Exports.parse(pkg) == %{"." => "./index.js"}
+    end
+
+    test "parses subpath exports" do
+      pkg = %{"exports" => %{"." => "./index.js", "./utils" => "./lib/utils.js"}}
+      result = NPM.Exports.parse(pkg)
+      assert result["."] == "./index.js"
+      assert result["./utils"] == "./lib/utils.js"
+    end
+
+    test "wraps conditional exports as root entry" do
+      pkg = %{"exports" => %{"import" => "./esm.js", "require" => "./cjs.js"}}
+      result = NPM.Exports.parse(pkg)
+      assert result["."] == %{"import" => "./esm.js", "require" => "./cjs.js"}
+    end
+
+    test "returns nil when no exports field" do
+      assert NPM.Exports.parse(%{"name" => "pkg"}) == nil
+    end
+
+    test "handles nested subpath with conditions" do
+      pkg = %{
+        "exports" => %{
+          "." => %{"import" => "./esm/index.js", "default" => "./cjs/index.js"},
+          "./utils" => "./lib/utils.js"
+        }
+      }
+
+      result = NPM.Exports.parse(pkg)
+      assert result["."] == %{"import" => "./esm/index.js", "default" => "./cjs/index.js"}
+      assert result["./utils"] == "./lib/utils.js"
+    end
+  end
+
+  describe "Exports.resolve" do
+    test "resolves string target" do
+      export_map = %{"." => "./index.js", "./utils" => "./lib/utils.js"}
+      assert {:ok, "./index.js"} = NPM.Exports.resolve(export_map, ".")
+      assert {:ok, "./lib/utils.js"} = NPM.Exports.resolve(export_map, "./utils")
+    end
+
+    test "resolves conditional target with matching condition" do
+      export_map = %{"." => %{"import" => "./esm.js", "require" => "./cjs.js"}}
+      assert {:ok, "./esm.js"} = NPM.Exports.resolve(export_map, ".", ["import", "default"])
+      assert {:ok, "./cjs.js"} = NPM.Exports.resolve(export_map, ".", ["require", "default"])
+    end
+
+    test "falls back to default condition" do
+      export_map = %{"." => %{"import" => "./esm.js", "default" => "./cjs.js"}}
+      assert {:ok, "./cjs.js"} = NPM.Exports.resolve(export_map, ".", ["default"])
+    end
+
+    test "returns error for missing subpath" do
+      export_map = %{"." => "./index.js"}
+      assert :error = NPM.Exports.resolve(export_map, "./missing")
+    end
+
+    test "returns error when no conditions match" do
+      export_map = %{"." => %{"import" => "./esm.js"}}
+      assert :error = NPM.Exports.resolve(export_map, ".", ["require"])
+    end
+  end
+
+  describe "Exports.subpaths" do
+    test "lists sorted subpaths" do
+      export_map = %{
+        "./utils" => "./lib/utils.js",
+        "." => "./index.js",
+        "./types" => "./types.d.ts"
+      }
+
+      assert NPM.Exports.subpaths(export_map) == [".", "./types", "./utils"]
+    end
+
+    test "returns empty for nil" do
+      assert NPM.Exports.subpaths(nil) == []
+    end
+  end
+
+  describe "Exports.module_type" do
+    test "detects ESM" do
+      assert NPM.Exports.module_type(%{"type" => "module"}) == :esm
+    end
+
+    test "defaults to CJS" do
+      assert NPM.Exports.module_type(%{"type" => "commonjs"}) == :cjs
+      assert NPM.Exports.module_type(%{}) == :cjs
+    end
+  end
+
   # --- Helpers ---
 
   defp create_test_tgz(files) do

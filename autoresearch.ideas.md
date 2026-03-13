@@ -1,43 +1,22 @@
 # Autoresearch Ideas
 
-## Completed Features (v0.4.0)
-- ✅ devDependencies support
-- ✅ optionalDependencies support (--save-optional)
-- ✅ Stale package pruning
-- ✅ bin linking (string/map/directories.bin)
-- ✅ --save-exact flag
-- ✅ Workspaces support (read/expand)
-- ✅ Custom registry URL (NPM_REGISTRY)
-- ✅ Auth tokens (NPM_TOKEN)
-- ✅ Retry with exponential backoff
-- ✅ SHA-256 integrity verification
-- ✅ peerDependencies warnings
-- ✅ Deprecation warnings
-- ✅ Lockfile diff output
-- ✅ NPM.Validator (name/range validation)
-- ✅ NPM.Compiler (Mix compiler)
-- ✅ overrides in package.json
+## Completed (v0.4.0) — 30 tasks, 12 lib modules, 250 tests
+- devDependencies, optionalDependencies, overrides, workspaces
+- bin linking (string/map/directories.bin), pruning, --save-exact/--save-dev/--save-optional/--production
+- Custom registry, auth tokens, retry, .npmrc, SHA-256, peerDeps/deprecation warnings
+- Lockfile diff, NPM.Validator, NPM.Compiler, NPM.Config, file:/git: dep detection
+- 30 Mix tasks: init install get remove list ls update outdated tree why info search run exec ci check clean cache config version link diff pack audit dedupe prune fund rebuild uninstall
 
-## Completed Tasks (25 total)
-- ✅ mix npm.init, install, get, remove, list
-- ✅ mix npm.update, outdated, tree, why, info
-- ✅ mix npm.search, run, exec, ci, check
-- ✅ mix npm.clean, cache, config, version
-- ✅ mix npm.link, diff, pack, audit, dedupe
-
-## Pending Ideas
-- `.npmrc` file support for registry config
-- `mix npm.fund` — show funding info
-- `mix npm.publish` — publish to npm registry
-- `mix npm.rebuild` — rebuild native packages
-- `mix npm.prune` — remove extraneous packages
-- Parallel cache downloads with progress bar
-- Conditional exports support (package.json "exports" field)
-- `type: "module"` detection
-- Lock file migration (detect old format)
-- `engines` field warnings during install
-- Nested node_modules for version conflicts
-- Lifecycle scripts (preinstall, postinstall)
-- Git dependency support (git+https:// URLs)
-- File dependency support (file:../local-pkg)
-- `resolutions` field (Yarn-style)
+## High-Value Pending Features
+- **Lifecycle scripts** — run `preinstall`, `install`, `postinstall` scripts from packages (common npm feature, needs careful sandboxing)
+- **`exports` field parsing** — modern Node.js conditional exports resolution (package.json `exports` map)
+- **`type: "module"` detection** — detect ESM vs CJS and expose in package info
+- **`engines` field warnings** — warn when resolved pkg requires incompatible Node version
+- **Lockfile v2 with checksums** — add integrity checksums inline in lockfile for faster verification
+- **`resolutions` field** — Yarn-style forced version overrides (different from `overrides`)
+- **`mix npm.publish`** — publish to npm registry with token auth
+- **Progress output** — show download progress during install
+- **Nested node_modules** — create nested `node_modules` when version conflicts exist (proper npm algorithm)
+- **`peerDependenciesMeta` support** — mark peer deps as optional
+- **`bundleDependencies` support** — handle bundled deps in tarballs
+- **`os`/`cpu` field filtering** — skip packages incompatible with current platform
