@@ -161,6 +161,19 @@ defmodule NPM.DedupeTest do
       assert s.saveable == 1
     end
 
+    test "many duplicates counted correctly" do
+      lockfile = %{
+        "ms" => %{version: "2.1.3", integrity: "", tarball: "", dependencies: %{}},
+        "a/node_modules/ms" => %{version: "2.0.0", integrity: "", tarball: "", dependencies: %{}},
+        "b/node_modules/ms" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}},
+        "debug" => %{version: "4.3.4", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      s = NPM.Dedupe.summary(lockfile)
+      assert s.duplicate_groups == 1
+      assert s.saveable == 2
+    end
+
     test "empty lockfile" do
       s = NPM.Dedupe.summary(%{})
       assert s.total_packages == 0

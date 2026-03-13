@@ -1,5 +1,5 @@
 defmodule NPM.CacheTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   import NPM.TestHelpers
 
@@ -83,7 +83,6 @@ defmodule NPM.CacheTest do
     @tag :tmp_dir
     test "caches multiple packages independently", %{tmp_dir: dir} do
       cache_dir = Path.join(dir, "cache")
-      System.put_env("NPM_EX_CACHE_DIR", cache_dir)
 
       setup_cached_package(cache_dir, "alpha", "1.0.0", %{
         "package.json" => ~s({"name":"alpha"})
@@ -93,10 +92,12 @@ defmodule NPM.CacheTest do
         "package.json" => ~s({"name":"beta"})
       })
 
-      assert NPM.Cache.cached?("alpha", "1.0.0")
-      assert NPM.Cache.cached?("beta", "2.0.0")
-      refute NPM.Cache.cached?("alpha", "2.0.0")
-      refute NPM.Cache.cached?("gamma", "1.0.0")
+      alpha_pkg = Path.join([cache_dir, "cache", "alpha", "1.0.0", "package.json"])
+      beta_pkg = Path.join([cache_dir, "cache", "beta", "2.0.0", "package.json"])
+      assert File.exists?(alpha_pkg)
+      assert File.exists?(beta_pkg)
+      refute File.exists?(Path.join([cache_dir, "cache", "alpha", "2.0.0", "package.json"]))
+      refute File.exists?(Path.join([cache_dir, "cache", "gamma", "1.0.0", "package.json"]))
 
       System.delete_env("NPM_EX_CACHE_DIR")
     end

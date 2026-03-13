@@ -146,7 +146,7 @@ defmodule NPM.MiscTest do
       # Read both and check mismatch
       {:ok, lockfile_data} = NPM.Lockfile.read(lock_path)
       {:ok, pkg_data} = NPM.PackageJSON.read_all(pkg_path)
-      all_deps = pkg_data.dependencies
+      _all_deps = pkg_data.dependencies
 
       # Express is in deps but not lockfile — should be a mismatch
       has_express_locked = Map.has_key?(lockfile_data, "express")
