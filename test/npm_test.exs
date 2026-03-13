@@ -4905,6 +4905,27 @@ defmodule NPMTest do
     end
   end
 
+  describe "Validator: scoped package name rules" do
+    test "accepts valid scoped names" do
+      assert :ok = NPM.Validator.validate_name("@scope/pkg")
+      assert :ok = NPM.Validator.validate_name("@types/node")
+      assert :ok = NPM.Validator.validate_name("@babel/core")
+    end
+
+    test "accepts scoped with multiple parts" do
+      assert :ok = NPM.Validator.validate_name("@my-org/my-pkg")
+    end
+  end
+
+  describe "npm semver: pre-release detection" do
+    test "pre-release version is detected by VersionUtil" do
+      assert NPM.VersionUtil.prerelease?("1.0.0-alpha")
+      assert NPM.VersionUtil.prerelease?("1.0.0-beta.1")
+      assert NPM.VersionUtil.prerelease?("2.0.0-rc.1")
+      refute NPM.VersionUtil.prerelease?("1.0.0")
+    end
+  end
+
   describe "Resolver: get_original_deps for non-excluded package" do
     test "returns empty map for unknown package" do
       NPM.Resolver.clear_cache()
