@@ -716,6 +716,56 @@ defmodule NPMTest do
     end
   end
 
+  # --- PackageJSON round-trip with both dep groups ---
+
+  describe "PackageJSON full round-trip" do
+    @tag :tmp_dir
+    test "add deps to both groups, remove from each, verify", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      NPM.PackageJSON.add_dep("lodash", "^4.0", path)
+      NPM.PackageJSON.add_dep("express", "^5.0", path)
+      NPM.PackageJSON.add_dep("eslint", "^9.0", path, dev: true)
+      NPM.PackageJSON.add_dep("jest", "^29.0", path, dev: true)
+
+      {:ok, %{dependencies: deps, dev_dependencies: dev_deps}} =
+        NPM.PackageJSON.read_all(path)
+
+      assert map_size(deps) == 2
+      assert map_size(dev_deps) == 2
+
+      NPM.PackageJSON.remove_dep("express", path)
+
+      {:ok, %{dependencies: deps2, dev_dependencies: dev_deps2}} =
+        NPM.PackageJSON.read_all(path)
+
+      assert map_size(deps2) == 1
+      assert deps2["lodash"] == "^4.0"
+      assert map_size(dev_deps2) == 2
+    end
+
+    @tag :tmp_dir
+    test "scripts and deps coexist", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      File.write!(path, ~s({
+        "name": "test-app",
+        "scripts": {"build": "tsc"},
+        "dependencies": {"lodash": "^4.0"},
+        "devDependencies": {"jest": "^29.0"}
+      }))
+
+      assert {:ok, scripts} = NPM.PackageJSON.read_scripts(path)
+      assert scripts == %{"build" => "tsc"}
+
+      assert {:ok, deps} = NPM.PackageJSON.read(path)
+      assert deps == %{"lodash" => "^4.0"}
+
+      assert {:ok, %{dev_dependencies: dev_deps}} = NPM.PackageJSON.read_all(path)
+      assert dev_deps == %{"jest" => "^29.0"}
+    end
+  end
+
   # --- Lockfile with dependencies lookup ---
 
   describe "Lockfile dependency chain" do
@@ -1031,6 +1081,49 @@ defmodule NPMTest do
 
     test "cached? returns false for nonexistent version" do
       refute NPM.Cache.cached?("lodash", "0.0.0-nonexistent")
+    end
+
+    @tag :tmp_dir
+    test "dir respects NPM_EX_CACHE_DIR env var", %{tmp_dir: dir} do
+      System.put_env("NPM_EX_CACHE_DIR", dir)
+      assert NPM.Cache.dir() == dir
+      System.delete_env("NPM_EX_CACHE_DIR")
+    end
+
+    test "dir defaults to home directory" do
+      original = System.get_env("NPM_EX_CACHE_DIR")
+      System.delete_env("NPM_EX_CACHE_DIR")
+
+      cache_dir = NPM.Cache.dir()
+      assert cache_dir =~ ".npm_ex"
+      assert String.starts_with?(cache_dir, System.user_home!())
+
+      if original, do: System.put_env("NPM_EX_CACHE_DIR", original)
+    end
+  end
+
+  # --- Linker.link with symlink strategy ---
+
+  describe "Linker.link with symlink and bin linking" do
+    @tag :tmp_dir
+    test "bin links work with symlink strategy", %{tmp_dir: dir} do
+      cache_dir = Path.join(dir, "cache")
+      nm_dir = Path.join(dir, "node_modules")
+
+      setup_cached_package(cache_dir, "cli-tool", "1.0.0", %{
+        "package.json" => ~s({"name":"cli-tool","bin":{"cli":"./bin/cli.js"}}),
+        "bin/cli.js" => "#!/usr/bin/env node\nconsole.log('hello')"
+      })
+
+      lockfile = %{
+        "cli-tool" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      System.put_env("NPM_EX_CACHE_DIR", cache_dir)
+      NPM.Linker.link(lockfile, nm_dir, :symlink)
+      System.delete_env("NPM_EX_CACHE_DIR")
+
+      assert File.exists?(Path.join([nm_dir, ".bin", "cli"]))
     end
   end
 
