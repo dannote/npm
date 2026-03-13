@@ -242,6 +242,51 @@ defmodule NPMTest do
     end
   end
 
+  # --- PackageJSON optional dependencies ---
+
+  describe "PackageJSON optional dependencies" do
+    @tag :tmp_dir
+    test "adds to optionalDependencies", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      NPM.PackageJSON.add_dep("fsevents", "^2.3.0", path, optional: true)
+
+      {:ok, %{optional_dependencies: opt_deps}} = NPM.PackageJSON.read_all(path)
+      assert opt_deps == %{"fsevents" => "^2.3.0"}
+    end
+
+    @tag :tmp_dir
+    test "read_all includes optionalDependencies", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      File.write!(path, ~s({
+        "dependencies": {"a": "^1.0"},
+        "devDependencies": {"b": "^2.0"},
+        "optionalDependencies": {"c": "^3.0"}
+      }))
+
+      {:ok, result} = NPM.PackageJSON.read_all(path)
+      assert result.dependencies == %{"a" => "^1.0"}
+      assert result.dev_dependencies == %{"b" => "^2.0"}
+      assert result.optional_dependencies == %{"c" => "^3.0"}
+    end
+
+    @tag :tmp_dir
+    test "removes from optionalDependencies", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+
+      File.write!(path, ~s({
+        "dependencies": {"a": "^1.0"},
+        "optionalDependencies": {"fsevents": "^2.3.0"}
+      }))
+
+      assert :ok = NPM.PackageJSON.remove_dep("fsevents", path)
+
+      {:ok, %{optional_dependencies: opt_deps}} = NPM.PackageJSON.read_all(path)
+      assert opt_deps == %{}
+    end
+  end
+
   # --- PackageJSON.read_all ---
 
   describe "PackageJSON.read_all" do

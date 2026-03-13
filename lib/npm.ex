@@ -33,8 +33,14 @@ defmodule NPM do
   @spec install(keyword()) :: :ok | {:error, term()}
   def install(opts \\ []) do
     case NPM.PackageJSON.read_all() do
-      {:ok, %{dependencies: deps, dev_dependencies: dev_deps}} ->
-        all_deps = if opts[:production], do: deps, else: Map.merge(deps, dev_deps)
+      {:ok, %{dependencies: deps, dev_dependencies: dev_deps, optional_dependencies: opt_deps}} ->
+        all_deps =
+          if opts[:production] do
+            Map.merge(deps, opt_deps)
+          else
+            deps |> Map.merge(dev_deps) |> Map.merge(opt_deps)
+          end
+
         do_install(all_deps, opts)
 
       error ->
