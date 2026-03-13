@@ -5066,6 +5066,55 @@ defmodule NPMTest do
     end
   end
 
+  describe "Linker: prune empty scoped directory cleanup" do
+    @tag :tmp_dir
+    test "prune removes empty scope directory", %{tmp_dir: dir} do
+      nm = Path.join(dir, "node_modules")
+      scope_dir = Path.join(nm, "@empty-scope")
+      File.mkdir_p!(scope_dir)
+
+      NPM.Linker.prune(nm, MapSet.new())
+      refute File.exists?(scope_dir)
+    end
+  end
+
+  describe "Exports: condition priority" do
+    test "import takes priority over require" do
+      exports = %{
+        "." => %{
+          "import" => "./esm.js",
+          "require" => "./cjs.js"
+        }
+      }
+
+      assert {:ok, "./esm.js"} = NPM.Exports.resolve(exports, ".", ["import", "require"])
+    end
+
+    test "first matching condition wins" do
+      exports = %{
+        "." => %{
+          "node" => "./node.js",
+          "browser" => "./browser.js",
+          "default" => "./default.js"
+        }
+      }
+
+      assert {:ok, "./node.js"} = NPM.Exports.resolve(exports, ".", ["node", "default"])
+    end
+  end
+
+  describe "Manifest: scripts detection" do
+    test "has_scripts? true for package with scripts" do
+      m = NPM.Manifest.from_json(~s({"name":"t","scripts":{"test":"jest"}}))
+      assert NPM.Manifest.has_scripts?(m)
+    end
+
+    test "has_scripts? false for package without scripts" do
+      m = NPM.Manifest.from_json(~s({"name":"t"}))
+      refute NPM.Manifest.has_scripts?(m)
+    end
+  end
+
   describe "Registry: encode_package preserves simple names" do
     test "simple names pass through unchanged" do
       assert "react" = NPM.Registry.encode_package("react")
