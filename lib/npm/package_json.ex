@@ -144,10 +144,20 @@ defmodule NPM.PackageJSON do
   @doc "Read overrides from `package.json`."
   @spec read_overrides(String.t()) :: {:ok, %{String.t() => String.t()}} | {:error, term()}
   def read_overrides(path \\ @default_path) do
+    read_field(path, "overrides")
+  end
+
+  @doc "Read resolutions (Yarn-style) from `package.json`."
+  @spec read_resolutions(String.t()) :: {:ok, %{String.t() => String.t()}} | {:error, term()}
+  def read_resolutions(path \\ @default_path) do
+    read_field(path, "resolutions")
+  end
+
+  defp read_field(path, field) do
     case File.read(path) do
       {:ok, content} ->
         data = :json.decode(content)
-        {:ok, Map.get(data, "overrides", %{})}
+        {:ok, Map.get(data, field, %{})}
 
       {:error, :enoent} ->
         {:ok, %{}}

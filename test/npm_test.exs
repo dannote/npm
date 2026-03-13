@@ -2687,6 +2687,33 @@ defmodule NPMTest do
     end
   end
 
+  # --- PackageJSON resolutions ---
+
+  describe "PackageJSON.read_resolutions" do
+    @tag :tmp_dir
+    test "reads Yarn-style resolutions", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+      File.write!(path, ~s({"resolutions": {"lodash": "4.17.21", "**/@types/node": "20.0.0"}}))
+
+      assert {:ok, resolutions} = NPM.PackageJSON.read_resolutions(path)
+      assert resolutions["lodash"] == "4.17.21"
+      assert resolutions["**/@types/node"] == "20.0.0"
+    end
+
+    @tag :tmp_dir
+    test "returns empty for missing resolutions", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+      File.write!(path, ~s({"name": "app"}))
+
+      assert {:ok, %{}} = NPM.PackageJSON.read_resolutions(path)
+    end
+
+    @tag :tmp_dir
+    test "returns empty for missing file", %{tmp_dir: dir} do
+      assert {:ok, %{}} = NPM.PackageJSON.read_resolutions(Path.join(dir, "missing.json"))
+    end
+  end
+
   # --- Lifecycle ---
 
   describe "Lifecycle.detect" do
@@ -2764,6 +2791,34 @@ defmodule NPMTest do
       File.mkdir_p!(nm_dir)
 
       assert NPM.Lifecycle.detect_all(nm_dir) == %{}
+    end
+  end
+
+  describe "Lifecycle.detect_all with scoped packages" do
+    @tag :tmp_dir
+    test "finds scripts in scoped packages", %{tmp_dir: dir} do
+      nm_dir = Path.join(dir, "node_modules")
+      pkg = Path.join([nm_dir, "@scope", "native"])
+      File.mkdir_p!(pkg)
+
+      File.write!(
+        Path.join(pkg, "package.json"),
+        ~s({"scripts": {"postinstall": "node setup.js"}})
+      )
+
+      result = NPM.Lifecycle.detect_all(nm_dir)
+      assert Map.has_key?(result, "@scope/native")
+    end
+  end
+
+  describe "Lifecycle.detect with prepare hook" do
+    @tag :tmp_dir
+    test "detects prepare script", %{tmp_dir: dir} do
+      path = Path.join(dir, "package.json")
+      File.write!(path, ~s({"scripts": {"prepare": "husky install"}}))
+
+      hooks = NPM.Lifecycle.detect(path)
+      assert {"prepare", "husky install"} in hooks
     end
   end
 
