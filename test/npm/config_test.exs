@@ -204,4 +204,71 @@ defmodule NPM.ConfigTest do
       assert is_nil(token) or is_binary(token)
     end
   end
+
+  describe "get" do
+    test "returns value for existing key" do
+      config = %{"registry" => "https://example.com"}
+      assert "https://example.com" = NPM.Config.get(config, "registry")
+    end
+
+    test "returns default for missing key" do
+      assert "fallback" = NPM.Config.get(%{}, "missing", "fallback")
+    end
+
+    test "returns nil for missing key with no default" do
+      assert nil == NPM.Config.get(%{}, "missing")
+    end
+  end
+
+  describe "merge" do
+    test "later configs override earlier" do
+      configs = [
+        %{"registry" => "https://a.com", "save-exact" => "true"},
+        %{"registry" => "https://b.com"}
+      ]
+
+      result = NPM.Config.merge(configs)
+      assert result["registry"] == "https://b.com"
+      assert result["save-exact"] == "true"
+    end
+
+    test "empty list returns empty map" do
+      assert %{} = NPM.Config.merge([])
+    end
+  end
+
+  describe "load" do
+    @tag :tmp_dir
+    test "loads project .npmrc", %{tmp_dir: dir} do
+      File.write!(Path.join(dir, ".npmrc"), "save-exact=true")
+      config = NPM.Config.load(dir)
+      assert config["save-exact"] == "true"
+    end
+
+    @tag :tmp_dir
+    test "empty for project without .npmrc", %{tmp_dir: dir} do
+      config = NPM.Config.load(dir)
+      assert is_map(config)
+    end
+  end
+
+  describe "scoped_registry" do
+    test "returns scoped registry when configured" do
+      config = %{
+        "registry" => "https://registry.npmjs.org",
+        "@myorg:registry" => "https://npm.myorg.com"
+      }
+
+      assert "https://npm.myorg.com" = NPM.Config.scoped_registry(config, "@myorg")
+    end
+
+    test "falls back to default registry" do
+      config = %{"registry" => "https://registry.npmjs.org"}
+      assert "https://registry.npmjs.org" = NPM.Config.scoped_registry(config, "@other")
+    end
+
+    test "falls back to npmjs.org when no registry configured" do
+      assert "https://registry.npmjs.org" = NPM.Config.scoped_registry(%{}, "@scope")
+    end
+  end
 end

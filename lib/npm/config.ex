@@ -49,6 +49,49 @@ defmodule NPM.Config do
     |> Map.new()
   end
 
+  @doc """
+  Gets a config value with fallback to defaults.
+  """
+  @spec get(map(), String.t(), term()) :: term()
+  def get(config, key, default \\ nil) do
+    Map.get(config, key, default)
+  end
+
+  @doc """
+  Merges multiple config maps (later overrides earlier).
+  """
+  @spec merge([map()]) :: map()
+  def merge(configs) do
+    Enum.reduce(configs, %{}, &Map.merge(&2, &1))
+  end
+
+  @doc """
+  Loads config from all levels: project .npmrc then user .npmrc.
+  Project values override user values.
+  """
+  @spec load(String.t()) :: map()
+  def load(project_dir \\ ".") do
+    user_config = read_file(Path.join(System.user_home!(), ".npmrc"))
+    project_config = read_file(Path.join(project_dir, ".npmrc"))
+    merge([user_config, project_config])
+  end
+
+  @doc """
+  Returns the registry URL for a given scope, or the default.
+  """
+  @spec scoped_registry(map(), String.t()) :: String.t()
+  def scoped_registry(config, scope) do
+    key = "#{scope}:registry"
+    Map.get(config, key, Map.get(config, "registry", "https://registry.npmjs.org"))
+  end
+
+  defp read_file(path) do
+    case File.read(path) do
+      {:ok, content} -> parse_npmrc(content)
+      _ -> %{}
+    end
+  end
+
   defp read_from_file(path, key) do
     case File.read(path) do
       {:ok, content} -> parse_npmrc(content) |> Map.get(key)
