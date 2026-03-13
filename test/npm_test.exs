@@ -5240,6 +5240,30 @@ defmodule NPMTest do
     end
   end
 
+  describe "NodeModules: disk_size with nested dirs" do
+    @tag :tmp_dir
+    test "includes files in subdirectories", %{tmp_dir: dir} do
+      nm = Path.join(dir, "node_modules")
+      File.mkdir_p!(Path.join([nm, "pkg", "lib"]))
+      File.write!(Path.join([nm, "pkg", "lib", "deep.js"]), String.duplicate("y", 2000))
+      File.write!(Path.join([nm, "pkg", "index.js"]), String.duplicate("x", 1000))
+
+      size = NPM.NodeModules.disk_size(nm)
+      assert size >= 3000
+    end
+  end
+
+  describe "Lockfile: write to existing directory" do
+    @tag :tmp_dir
+    test "write creates file in existing dir", %{tmp_dir: dir} do
+      path = Path.join(dir, "npm.lock")
+      NPM.Lockfile.write(%{}, path)
+      assert File.exists?(path)
+      content = File.read!(path)
+      assert content =~ "lockfileVersion"
+    end
+  end
+
   describe "DepTree: flatten uniqueness" do
     test "flatten returns unique package names" do
       lockfile = %{
