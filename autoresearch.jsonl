@@ -85,3 +85,4 @@
 {"run":84,"commit":"5108435","metric":696,"metrics":{},"status":"keep","description":"Add DepGraph fan_out, VersionUtil edge cases (bump resets, pre-release sort), Integrity round-trip tests — 7 tests","timestamp":1773403140512,"segment":0}
 {"run":85,"commit":"f8ae721","metric":700,"metrics":{},"status":"keep","description":"Add Manifest from_json edge cases (defaults, has_scripts?, all_dep_names, ESM type) — 700 tests milestone","timestamp":1773403165981,"segment":0}
 {"run":86,"commit":"70fad9e","metric":702,"metrics":{},"status":"keep","description":"Add frozen install lockfile mismatch detection test, default link strategy verification test","timestamp":1773403208004,"segment":0}
+{"run":87,"commit":"25104dc","metric":706,"metrics":{},"status":"keep","description":"Add NPM.LockMerge (merge, merge with resolver, diff) for workspace lockfile merging — 4 behavior tests","timestamp":1773403261427,"segment":0}

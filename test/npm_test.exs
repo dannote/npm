@@ -4741,6 +4741,71 @@ defmodule NPMTest do
     end
   end
 
+  describe "Tarball: edge cases" do
+    @tag :tmp_dir
+    test "extract handles empty tarball", %{tmp_dir: dir} do
+      # An empty tgz should return an error, not crash
+      result = NPM.Tarball.extract("", dir)
+      assert {:error, _} = result
+    end
+
+    @tag :tmp_dir
+    test "extract handles single-file tarball", %{tmp_dir: dir} do
+      tgz = create_test_tgz(%{"package.json" => ~s({"name":"single"})})
+      {:ok, count} = NPM.Tarball.extract(tgz, dir)
+      assert count == 1
+    end
+  end
+
+  describe "Lockfile: read/write round-trip with complex deps" do
+    @tag :tmp_dir
+    test "preserves nested dependency ranges through round-trip", %{tmp_dir: dir} do
+      path = Path.join(dir, "npm.lock")
+
+      original = %{
+        "express" => %{
+          version: "4.21.2",
+          integrity: "sha512-abc",
+          tarball: "https://registry/express-4.21.2.tgz",
+          dependencies: %{
+            "accepts" => "~1.3.8",
+            "body-parser" => "1.20.3",
+            "cookie" => "0.7.1",
+            "debug" => "2.6.9"
+          }
+        },
+        "debug" => %{
+          version: "2.6.9",
+          integrity: "sha512-def",
+          tarball: "https://registry/debug-2.6.9.tgz",
+          dependencies: %{"ms" => "2.0.0"}
+        }
+      }
+
+      NPM.Lockfile.write(original, path)
+      {:ok, restored} = NPM.Lockfile.read(path)
+
+      assert restored["express"].version == "4.21.2"
+      assert restored["express"].dependencies["accepts"] == "~1.3.8"
+      assert restored["express"].dependencies["debug"] == "2.6.9"
+      assert restored["debug"].dependencies["ms"] == "2.0.0"
+    end
+  end
+
+  describe "Config: parse_npmrc edge cases" do
+    test "handles = signs in values" do
+      content = "//registry.npmjs.org/:_authToken=npm_abcdef123456=="
+      result = NPM.Config.parse_npmrc(content)
+      assert result["//registry.npmjs.org/:_authToken"] == "npm_abcdef123456=="
+    end
+
+    test "handles trailing whitespace" do
+      content = "registry=https://registry.npmjs.org/  \n"
+      result = NPM.Config.parse_npmrc(content)
+      assert result["registry"] == "https://registry.npmjs.org/"
+    end
+  end
+
   describe "LockMerge: lockfile merging" do
     test "merge prefers newer entries" do
       base = %{
