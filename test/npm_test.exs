@@ -4394,6 +4394,64 @@ defmodule NPMTest do
 
   # --- Real npm behavior tests ---
 
+  describe "Tarball: real format handling" do
+    @tag :tmp_dir
+    test "creates proper package dir from tgz with nested dirs", %{tmp_dir: dir} do
+      tgz =
+        create_test_tgz(%{
+          "package.json" => ~s({"name":"multi-file","version":"1.0.0"}),
+          "lib/index.js" => "module.exports = {}",
+          "lib/utils/helper.js" => "module.exports = {}"
+        })
+
+      {:ok, count} = NPM.Tarball.extract(tgz, dir)
+      assert count == 3
+      assert File.exists?(Path.join(dir, "package.json"))
+      assert File.exists?(Path.join(dir, "lib/index.js"))
+      assert File.exists?(Path.join(dir, "lib/utils/helper.js"))
+    end
+
+    @tag :tmp_dir
+    test "integrity check rejects tampered data", %{tmp_dir: dir} do
+      tgz = create_test_tgz(%{"package.json" => ~s({"name":"test"})})
+
+      good_integrity = NPM.Integrity.compute_sha512(tgz)
+      assert :ok = NPM.Tarball.verify_integrity(tgz, good_integrity)
+
+      bad_integrity = "sha512-" <> Base.encode64("wrong")
+      assert {:error, :integrity_mismatch} = NPM.Tarball.verify_integrity(tgz, bad_integrity)
+    end
+  end
+
+  describe "Linker: copy strategy creates real files" do
+    @tag :tmp_dir
+    test "copy strategy creates independent files, not symlinks", %{tmp_dir: dir} do
+      cache_dir = Path.join(dir, "cache")
+      nm_dir = Path.join(dir, "node_modules")
+
+      setup_cached_package(cache_dir, "real-pkg", "1.0.0", %{
+        "package.json" => ~s({"name":"real-pkg","version":"1.0.0"}),
+        "index.js" => "module.exports = {}"
+      })
+
+      System.put_env("NPM_EX_CACHE_DIR", cache_dir)
+
+      lockfile = %{
+        "real-pkg" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      assert :ok = NPM.Linker.link(lockfile, nm_dir, :copy)
+
+      target = Path.join([nm_dir, "real-pkg", "index.js"])
+      assert File.exists?(target)
+      # Should NOT be a symlink with copy strategy
+      {:ok, stat} = File.lstat(target)
+      assert stat.type == :regular
+
+      System.delete_env("NPM_EX_CACHE_DIR")
+    end
+  end
+
   describe "Linker: npm-compatible hoisting" do
     test "single dependency hoists to top level" do
       lockfile = %{
