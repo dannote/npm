@@ -5103,6 +5103,68 @@ defmodule NPMTest do
     end
   end
 
+  describe "LockMerge: merge with multiple conflicts" do
+    test "all newer entries win by default" do
+      base = %{
+        "a" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}},
+        "b" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}},
+        "c" => %{version: "1.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      newer = %{
+        "a" => %{version: "2.0.0", integrity: "", tarball: "", dependencies: %{}},
+        "b" => %{version: "3.0.0", integrity: "", tarball: "", dependencies: %{}}
+      }
+
+      result = NPM.LockMerge.merge(base, newer)
+      assert result["a"].version == "2.0.0"
+      assert result["b"].version == "3.0.0"
+      assert result["c"].version == "1.0.0"
+    end
+  end
+
+  describe "PackageJSON: workspace glob expansion" do
+    @tag :tmp_dir
+    test "expand_workspaces skips dirs without package.json", %{tmp_dir: dir} do
+      File.mkdir_p!(Path.join(dir, "packages/valid"))
+      File.write!(Path.join([dir, "packages", "valid", "package.json"]), ~s({"name":"valid"}))
+      File.mkdir_p!(Path.join(dir, "packages/invalid"))
+      # No package.json in invalid
+
+      result = NPM.PackageJSON.expand_workspaces(["packages/*"], dir)
+      valid_names = Enum.map(result, &Path.basename/1)
+      assert "valid" in valid_names
+      refute "invalid" in valid_names
+    end
+  end
+
+  describe "ScopeRegistry: registry_for returns default" do
+    test "unscoped package uses default registry" do
+      url = NPM.ScopeRegistry.registry_for("lodash")
+      assert url == "https://registry.npmjs.org"
+    end
+  end
+
+  describe "Validator: validate_range additional" do
+    test "validates hyphen range" do
+      assert :ok = NPM.Validator.validate_range("1.0.0 - 2.0.0")
+    end
+
+    test "validates x-range" do
+      assert :ok = NPM.Validator.validate_range("1.x")
+    end
+  end
+
+  describe "DepGraph: roots in complex graph" do
+    test "multiple roots detected" do
+      adj = %{"a" => ["c"], "b" => ["c"], "c" => []}
+      roots = NPM.DepGraph.roots(adj)
+      assert "a" in roots
+      assert "b" in roots
+      refute "c" in roots
+    end
+  end
+
   describe "Manifest: scripts detection" do
     test "has_scripts? true for package with scripts" do
       m = NPM.Manifest.from_json(~s({"name":"t","scripts":{"test":"jest"}}))
