@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Npm.Exec do
 
   @impl true
   def run([command | args]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
 
     bin_path = Path.join("node_modules/.bin", command)
 

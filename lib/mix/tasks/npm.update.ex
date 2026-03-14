@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Npm.Update do
 
   @impl true
   def run(args) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
 
     case args do
       [] -> NPM.update()

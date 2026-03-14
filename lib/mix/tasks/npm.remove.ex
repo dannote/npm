@@ -12,7 +12,7 @@ defmodule Mix.Tasks.Npm.Remove do
 
   @impl true
   def run([name]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
 
     case NPM.remove(name) do
       :ok ->

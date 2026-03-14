@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Npm.Get do
 
   @impl true
   def run([]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
     NPM.get()
   end
 

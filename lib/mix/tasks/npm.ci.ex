@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Npm.Ci do
 
   @impl true
   def run([]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
     NPM.install(frozen: true)
   end
 

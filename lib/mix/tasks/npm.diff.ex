@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Npm.Diff do
 
   @impl true
   def run([]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
 
     case read_git_lockfile() do
       {:ok, old_lockfile} ->

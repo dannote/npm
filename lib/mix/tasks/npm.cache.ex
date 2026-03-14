@@ -12,7 +12,7 @@ defmodule Mix.Tasks.Npm.Cache do
 
   @impl true
   def run(["status"]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
     cache_dir = NPM.Cache.dir()
 
     if File.exists?(cache_dir) do
@@ -26,7 +26,7 @@ defmodule Mix.Tasks.Npm.Cache do
   end
 
   def run(["clean"]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
     cache_dir = NPM.Cache.dir()
 
     if File.exists?(cache_dir) do

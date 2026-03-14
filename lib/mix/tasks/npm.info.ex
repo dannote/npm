@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Npm.Info do
 
   @impl true
   def run([spec]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
     {name, version} = parse_spec(spec)
     show_info(name, version)
   end

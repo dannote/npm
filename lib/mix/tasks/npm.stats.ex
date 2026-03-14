@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Npm.Stats do
 
   @impl true
   def run([]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
 
     with {:ok, %{dependencies: deps, dev_dependencies: dev_deps}} <- NPM.PackageJSON.read_all(),
          {:ok, lockfile} when lockfile != %{} <- NPM.Lockfile.read() do

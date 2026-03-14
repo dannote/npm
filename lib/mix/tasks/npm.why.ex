@@ -13,7 +13,7 @@ defmodule Mix.Tasks.Npm.Why do
 
   @impl true
   def run([name]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
 
     with {:ok, lockfile} <- NPM.Lockfile.read(),
          {:ok, deps} <- NPM.PackageJSON.read() do

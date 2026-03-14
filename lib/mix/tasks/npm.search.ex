@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Npm.Search do
 
   @impl true
   def run(args) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
     {opts, terms, _} = OptionParser.parse(args, strict: [limit: :integer])
 
     case terms do

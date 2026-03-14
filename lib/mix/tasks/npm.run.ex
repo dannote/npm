@@ -15,12 +15,12 @@ defmodule Mix.Tasks.Npm.Run do
 
   @impl true
   def run([]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
     list_scripts()
   end
 
   def run([script_name | extra_args]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
     run_script(script_name, extra_args)
   end
 

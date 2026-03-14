@@ -13,7 +13,7 @@ defmodule Mix.Tasks.Npm.Config do
 
   @impl true
   def run([]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
 
     Mix.shell().info("registry: #{NPM.Registry.registry_url()}")
     Mix.shell().info("cache: #{NPM.Cache.dir()}")

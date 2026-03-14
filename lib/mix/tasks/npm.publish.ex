@@ -22,7 +22,7 @@ defmodule Mix.Tasks.Npm.Publish do
 
   @impl true
   def run(args) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
 
     {opts, _, _} =
       OptionParser.parse(args, strict: [tag: :string, access: :string, dry_run: :boolean])

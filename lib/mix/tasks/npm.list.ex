@@ -14,7 +14,7 @@ defmodule Mix.Tasks.Npm.List do
 
   @impl true
   def run(args) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
     {opts, _, _} = OptionParser.parse(args, strict: [depth: :integer])
 
     with {:ok, %{dependencies: deps, dev_dependencies: dev_deps}} <-

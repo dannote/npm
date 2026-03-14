@@ -20,7 +20,7 @@ defmodule Mix.Tasks.Npm.Install do
 
   @impl true
   def run(args) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
     {opts, positional} = parse_args(args)
 
     case positional do

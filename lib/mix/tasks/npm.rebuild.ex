@@ -13,7 +13,7 @@ defmodule Mix.Tasks.Npm.Rebuild do
 
   @impl true
   def run([]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
 
     if File.exists?("node_modules") do
       File.rm_rf!("node_modules")

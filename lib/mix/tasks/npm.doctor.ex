@@ -19,7 +19,7 @@ defmodule Mix.Tasks.Npm.Doctor do
 
   @impl true
   def run([]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
 
     checks = [
       {"package.json", check_package_json()},

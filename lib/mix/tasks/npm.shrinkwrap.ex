@@ -15,7 +15,7 @@ defmodule Mix.Tasks.Npm.Shrinkwrap do
 
   @impl true
   def run([]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
 
     case NPM.Lockfile.read() do
       {:ok, lockfile} when lockfile == %{} ->

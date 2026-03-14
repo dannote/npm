@@ -15,7 +15,7 @@ defmodule Mix.Tasks.Npm.View do
 
   @impl true
   def run([name | fields]) do
-    Mix.Task.run("app.config")
+    Application.ensure_all_started(:req)
 
     case NPM.Registry.get_packument(name) do
       {:ok, packument} ->

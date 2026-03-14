@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+- Fix mix tasks crashing with `unknown registry: Req.Finch` when host app hasn't started the HTTP stack
+
 ## 0.4.0
 
 ### New Mix Tasks (21 new, 43 total)
