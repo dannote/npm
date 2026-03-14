@@ -18,7 +18,7 @@ defmodule Mix.Tasks.Npm.Cache do
     if File.exists?(cache_dir) do
       {size, count} = dir_stats(cache_dir)
       Mix.shell().info("Cache: #{cache_dir}")
-      Mix.shell().info("Size: #{format_bytes(size)}")
+      Mix.shell().info("Size: #{NPM.FormatUtil.format_size(size)}")
       Mix.shell().info("Packages: #{count}")
     else
       Mix.shell().info("Cache: #{cache_dir} (empty)")
@@ -32,7 +32,7 @@ defmodule Mix.Tasks.Npm.Cache do
     if File.exists?(cache_dir) do
       {size, count} = dir_stats(cache_dir)
       File.rm_rf!(cache_dir)
-      Mix.shell().info("Removed #{count} packages (#{format_bytes(size)})")
+      Mix.shell().info("Removed #{count} packages (#{NPM.FormatUtil.format_size(size)})")
     else
       Mix.shell().info("Cache is already empty.")
     end
@@ -53,8 +53,4 @@ defmodule Mix.Tasks.Npm.Cache do
       end
     end)
   end
-
-  defp format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"
-  defp format_bytes(bytes) when bytes < 1_048_576, do: "#{Float.round(bytes / 1024, 1)} KB"
-  defp format_bytes(bytes), do: "#{Float.round(bytes / 1_048_576, 1)} MB"
 end

@@ -52,9 +52,7 @@ defmodule NPM.LockfileStats do
   Formats size in human-readable form.
   """
   @spec format_size(non_neg_integer()) :: String.t()
-  def format_size(bytes) when bytes < 1024, do: "#{bytes} B"
-  def format_size(bytes) when bytes < 1_048_576, do: "#{Float.round(bytes / 1024, 1)} KB"
-  def format_size(bytes), do: "#{Float.round(bytes / 1_048_576, 1)} MB"
+  defdelegate format_size(bytes), to: NPM.FormatUtil
 
   defp has_field?(entry, field) do
     case Map.get(entry, field) || Map.get(entry, to_string(field)) do

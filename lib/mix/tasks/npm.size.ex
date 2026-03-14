@@ -26,7 +26,7 @@ defmodule Mix.Tasks.Npm.Size do
     total_files = NPM.NodeModules.file_count(dir)
 
     Mix.shell().info("node_modules analysis:")
-    Mix.shell().info("  Total size:  #{format_bytes(total_size)}")
+    Mix.shell().info("  Total size:  #{NPM.FormatUtil.format_size(total_size)}")
     Mix.shell().info("  Total files: #{total_files}")
 
     packages = NPM.NodeModules.installed(dir)
@@ -48,11 +48,7 @@ defmodule Mix.Tasks.Npm.Size do
     |> Enum.sort_by(fn {_, size} -> -size end)
     |> Enum.take(top_n)
     |> Enum.each(fn {name, size} ->
-      Mix.shell().info("    #{format_bytes(size)} #{name}")
+      Mix.shell().info("    #{NPM.FormatUtil.format_size(size)} #{name}")
     end)
   end
-
-  defp format_bytes(bytes) when bytes < 1024, do: "#{bytes} B"
-  defp format_bytes(bytes) when bytes < 1_048_576, do: "#{Float.round(bytes / 1024, 1)} KB"
-  defp format_bytes(bytes), do: "#{Float.round(bytes / 1_048_576, 1)} MB"
 end

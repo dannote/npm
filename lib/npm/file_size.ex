@@ -55,9 +55,7 @@ defmodule NPM.FileSize do
   Formats a byte size to human-readable string.
   """
   @spec format_size(non_neg_integer()) :: String.t()
-  def format_size(bytes) when bytes < 1024, do: "#{bytes} B"
-  def format_size(bytes) when bytes < 1_048_576, do: "#{Float.round(bytes / 1024, 1)} KB"
-  def format_size(bytes), do: "#{Float.round(bytes / 1_048_576, 1)} MB"
+  defdelegate format_size(bytes), to: NPM.FormatUtil
 
   defp list_files(dir) do
     if File.dir?(dir) do
